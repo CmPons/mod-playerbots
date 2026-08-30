@@ -80,10 +80,7 @@ void AutoMaintenanceOnLevelupAction::LearnSpells(std::ostringstream* out)
 void AutoMaintenanceOnLevelupAction::LearnTrainerSpells(std::ostringstream* /*out*/)
 {
     PlayerbotFactory factory(bot, bot->GetLevel());
-    factory.InitSkills();
-    factory.InitClassSpells();
-    factory.InitAvailableSpells();
-    factory.InitPet();
+    ApplyLevelupTrainerMaintenanceSteps(factory);
 }
 
 void AutoMaintenanceOnLevelupAction::LearnQuestSpells(std::ostringstream* out)

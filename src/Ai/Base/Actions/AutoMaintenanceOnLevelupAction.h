@@ -11,6 +11,16 @@
 
 class PlayerbotAI;
 
+template <typename Factory>
+void ApplyLevelupTrainerMaintenanceSteps(Factory& factory)
+{
+    factory.InitSkills();
+    factory.InitMounts();
+    factory.InitClassSpells();
+    factory.InitAvailableSpells();
+    factory.InitPet();
+}
+
 class AutoMaintenanceOnLevelupAction : public Action
 {
 public:
