@@ -3619,11 +3619,43 @@ bool BGTactics::atFlag(std::vector<BattleBotPath*> const& vPaths, std::vector<ui
     if (closeObjects.empty())
         return false;
 
+    auto getSelfDefenseTargetWhileCapturing = [&]() -> Unit*
+    {
+        if (Unit* attacker = bot->getAttackerForHelper())
+        {
+            if (attacker->IsPlayer())
+                return attacker;
+            if (attacker->IsPet())
+                if (Unit* owner = attacker->GetOwner(); owner && owner->IsPlayer())
+                    return owner;
+            return attacker;
+        }
+
+        if (Unit* enemyPlayer = AI_VALUE(Unit*, "enemy player target"))
+            if (enemyPlayer->IsAlive())
+                return enemyPlayer;
+
+        return nullptr;
+    };
+
     auto keepStationaryWhileCapturing = [&](CurrentSpellTypes spellType)
     {
         Spell* currentSpell = bot->GetCurrentSpell(spellType);
         if (!currentSpell || !currentSpell->m_spellInfo || currentSpell->m_spellInfo->Id != SPELL_CAPTURE_BANNER)
             return false;
+
+        // In Arathi Basin, survival beats greed-capping: if a bot gets attacked while
+        // channeling a node, cancel the cap and let combat AI select/fight the attacker.
+        if (bgType == BATTLEGROUND_AB && bot->IsInCombat())
+        {
+            if (Unit* defenseTarget = getSelfDefenseTargetWhileCapturing())
+                context->GetValue<Unit*>("current target")->Set(defenseTarget);
+
+            bot->InterruptNonMeleeSpells(true);
+            if (bot->isMoving())
+                bot->StopMoving();
+            return false;
+        }
 
         // If the capture target is no longer available (another bot already captured it), stop channeling
         if (GameObject* targetFlag = currentSpell->m_targets.GetGOTarget())
@@ -3698,6 +3730,14 @@ bool BGTactics::atFlag(std::vector<BattleBotPath*> const& vPaths, std::vector<ui
 
         targetFlag = go;
         break;
+    }
+
+    // If we're already under attack at an AB node, fight first instead of starting/continuing a cap.
+    if (bgType == BATTLEGROUND_AB && targetFlag && bot->IsInCombat())
+    {
+        if (Unit* defenseTarget = getSelfDefenseTargetWhileCapturing())
+            context->GetValue<Unit*>("current target")->Set(defenseTarget);
+        return false;
     }
 
     // If we found a valid flag/base to interact with
