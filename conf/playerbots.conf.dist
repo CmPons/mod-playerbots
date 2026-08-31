@@ -442,6 +442,7 @@ AiPlayerbot.HighMana = 65
 AiPlayerbot.AutoPickReward = yes
 
 # Sync quests with player (bots will complete quests the moment you hand them in and will not loot quest items.)
+# Local preference: enabled because some quest mechanics are difficult for bots to complete directly.
 # Default: 1 (enabled)
 AiPlayerbot.SyncQuestWithPlayer = 1
 
@@ -785,6 +786,18 @@ AiPlayerbot.DowngradeMaxLevelBot = 0
 # Set XP rate for randombots (Default: 1.0)
 # Server XP Rate * AiPlayerbot.RandomBotXPRate
 AiPlayerbot.RandomBotXPRate = 1.0
+
+# Treat random bots on a real player's friends list as persistent companions.
+# Protected companions are excluded from random re-level/regear/spec randomization,
+# random teleport/roaming moves, and random BG/LFG filler queues. They can still be
+# added/removed by the player and still use normal explicit playerbot commands.
+# Default: 1 (enabled)
+AiPlayerbot.PersistentCompanionsFromFriends = 1
+
+# Maximum friend-listed random bots protected per real-player account. If an account
+# friends more than this, the lowest character GUIDs are protected first. Set 0 for unlimited.
+# Default: 5
+AiPlayerbot.PersistentCompanionMaxPerAccount = 5
 
 #
 #
@@ -1300,11 +1313,11 @@ AiPlayerbot.RandomBotAutoJoinBG = 0
 # AiPlayerbot.RandomBotAutoJoinAVBrackets = 0,1,2,3
 # AiPlayerbot.RandomBotAutoJoinEYBrackets = 0,1,2
 # AiPlayerbot.RandomBotAutoJoinICBrackets = 0,1
-AiPlayerbot.RandomBotAutoJoinWSBrackets = 7
-AiPlayerbot.RandomBotAutoJoinABBrackets = 6
-AiPlayerbot.RandomBotAutoJoinAVBrackets = 3
-AiPlayerbot.RandomBotAutoJoinEYBrackets = 2
-AiPlayerbot.RandomBotAutoJoinICBrackets = 1
+AiPlayerbot.RandomBotAutoJoinWSBrackets = 0,1,2,3,4,5,6,7
+AiPlayerbot.RandomBotAutoJoinABBrackets = 0,1,2,3,4,5,6
+AiPlayerbot.RandomBotAutoJoinAVBrackets = 0,1,2,3
+AiPlayerbot.RandomBotAutoJoinEYBrackets = 0,1,2
+AiPlayerbot.RandomBotAutoJoinICBrackets = 0,1
 
 # Battlegrounds battles count (per bracket):
 AiPlayerbot.RandomBotAutoJoinBGWSCount = 1

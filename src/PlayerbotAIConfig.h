@@ -401,6 +401,8 @@ public:
     bool downgradeMaxLevelBot;
     bool equipAndSpecPersistence;
     int32 equipAndSpecPersistenceLevel;
+    bool persistentCompanionsFromFriends;
+    uint32 persistentCompanionMaxPerAccount;
     int32 groupInvitationPermission;
     bool keepAltsInGroup = false;
     bool KeepAltsInGroup() const { return keepAltsInGroup; }

@@ -606,6 +606,8 @@ bool PlayerbotAIConfig::Initialize()
     downgradeMaxLevelBot = sConfigMgr->GetOption<bool>("AiPlayerbot.DowngradeMaxLevelBot", true);
     equipAndSpecPersistence = sConfigMgr->GetOption<bool>("AiPlayerbot.EquipAndSpecPersistence", true);
     equipAndSpecPersistenceLevel = sConfigMgr->GetOption<int32>("AiPlayerbot.EquipAndSpecPersistenceLevel", 1);
+    persistentCompanionsFromFriends = sConfigMgr->GetOption<bool>("AiPlayerbot.PersistentCompanionsFromFriends", true);
+    persistentCompanionMaxPerAccount = sConfigMgr->GetOption<uint32>("AiPlayerbot.PersistentCompanionMaxPerAccount", 5);
     groupInvitationPermission = sConfigMgr->GetOption<int32>("AiPlayerbot.GroupInvitationPermission", 1);
     keepAltsInGroup = sConfigMgr->GetOption<bool>("AiPlayerbot.KeepAltsInGroup", false);
     allowSummonInCombat = sConfigMgr->GetOption<bool>("AiPlayerbot.AllowSummonInCombat", true);

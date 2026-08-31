@@ -106,6 +106,8 @@ public:
     bool IsRandomBot(ObjectGuid::LowType bot);
     bool IsAddclassBot(Player* bot);
     bool IsAddclassBot(ObjectGuid::LowType bot);
+    bool IsPersistentCompanion(Player* bot);
+    bool IsPersistentCompanion(ObjectGuid::LowType bot);
     void Randomize(Player* bot);
     void Clear(Player* bot);
     void RandomizeFirst(Player* bot);
@@ -246,6 +248,12 @@ private:
     // std::map<uint32, std::vector<WorldLocation>> rpgLocsCache;
     std::map<uint32, std::map<uint32, std::vector<WorldLocation>>> rpgLocsCacheLevel;
     std::map<TeamId, std::map<BattlegroundTypeId, std::vector<uint32>>> BattleMastersCache;
+    struct PersistentCompanionCacheEntry
+    {
+        bool isProtected = false;
+        uint32 checkedAt = 0;
+    };
+    std::unordered_map<uint32, PersistentCompanionCacheEntry> persistentCompanionCache;
     std::unordered_map<uint32, BotEventCache> eventCache;
     std::list<uint32> currentBots;
     uint32 bgBotsCount;

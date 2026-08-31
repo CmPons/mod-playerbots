@@ -29,10 +29,26 @@
 #include "MapMgr.h"
 #include "NewRpgInfo.h"
 #include "NewRpgStrategy.h"
+#include "Battlefield.h"
+#include "BattlefieldMgr.h"
 #include "ObjectGuid.h"
 #include "PerfMonitor.h"
 #include "Player.h"
 #include "PlayerbotAI.h"
+
+namespace
+{
+    // True while the bot is a Wintergrasp combatant. WG is a Battlefield, not a Battleground,
+    // so InBattleground() is false there and the random-bot manager would otherwise relocate
+    // WG bots out of the fight (the "churn"). Used to exempt them, exactly like InBattleground().
+    bool IsInWintergraspWar(Player* bot)
+    {
+        if (!bot || bot->GetZoneId() != 4197 /*Wintergrasp*/)
+            return false;
+        Battlefield* bf = sBattlefieldMgr->GetBattlefieldToZoneId(4197);
+        return bf && bf->IsWarTime();
+    }
+}
 #include "PlayerbotAIConfig.h"
 #include "PlayerbotFactory.h"
 #include "PlayerbotTextMgr.h"
@@ -629,6 +645,93 @@ bool RandomPlayerbotMgr::IsAccountType(uint32 accountId, uint8 accountType)
 {
     QueryResult result = PlayerbotsDatabase.Query("SELECT 1 FROM playerbots_account_type WHERE account_id = {} AND account_type = {}", accountId, accountType);
     return result != nullptr;
+}
+
+bool RandomPlayerbotMgr::IsPersistentCompanion(Player* bot)
+{
+    if (!bot)
+        return false;
+    return IsPersistentCompanion(bot->GetGUID().GetCounter());
+}
+
+bool RandomPlayerbotMgr::IsPersistentCompanion(ObjectGuid::LowType bot)
+{
+    if (!sPlayerbotAIConfig.persistentCompanionsFromFriends || !bot)
+        return false;
+
+    ObjectGuid botGuid = ObjectGuid::Create<HighGuid::Player>(bot);
+    uint32 botAccount = sCharacterCache->GetCharacterAccountIdByGuid(botGuid);
+    if (!sPlayerbotAIConfig.IsInRandomAccountList(botAccount))
+        return false;
+
+    uint32 now = NowSeconds();
+    constexpr uint32 CACHE_TTL_SECONDS = 60;
+    auto cacheItr = persistentCompanionCache.find(bot);
+    if (cacheItr != persistentCompanionCache.end() && now - cacheItr->second.checkedAt < CACHE_TTL_SECONDS)
+        return cacheItr->second.isProtected;
+
+    bool protectedByFriend = false;
+    QueryResult owners = CharacterDatabase.Query(
+        "SELECT DISTINCT owner.account "
+        "FROM character_social cs "
+        "INNER JOIN characters owner ON owner.guid = cs.guid "
+        "WHERE cs.friend = {} AND (cs.flags & 1) = 1",
+        bot);
+
+    if (owners)
+    {
+        do
+        {
+            uint32 ownerAccount = owners->Fetch()[0].Get<uint32>();
+            if (!ownerAccount)
+                continue;
+            if (sPlayerbotAIConfig.IsInRandomAccountList(ownerAccount) || IsAccountType(ownerAccount, 1) ||
+                IsAccountType(ownerAccount, 2))
+                continue;
+
+            uint32 maxProtected = sPlayerbotAIConfig.persistentCompanionMaxPerAccount;
+            if (!maxProtected)
+            {
+                protectedByFriend = true;
+                break;
+            }
+
+            uint32 protectedCount = 0;
+            QueryResult friends = CharacterDatabase.Query(
+                "SELECT DISTINCT cs.friend "
+                "FROM character_social cs "
+                "INNER JOIN characters owner ON owner.guid = cs.guid "
+                "WHERE owner.account = {} AND (cs.flags & 1) = 1 "
+                "ORDER BY cs.friend ASC",
+                ownerAccount);
+
+            if (!friends)
+                continue;
+
+            do
+            {
+                uint32 friendLowGuid = friends->Fetch()[0].Get<uint32>();
+                ObjectGuid friendGuid = ObjectGuid::Create<HighGuid::Player>(friendLowGuid);
+                uint32 friendAccount = sCharacterCache->GetCharacterAccountIdByGuid(friendGuid);
+                if (!sPlayerbotAIConfig.IsInRandomAccountList(friendAccount))
+                    continue;
+
+                if (friendLowGuid == bot)
+                {
+                    protectedByFriend = protectedCount < maxProtected;
+                    break;
+                }
+
+                ++protectedCount;
+            } while (friends->NextRow());
+
+            if (protectedByFriend)
+                break;
+        } while (owners->NextRow());
+    }
+
+    persistentCompanionCache[bot] = PersistentCompanionCacheEntry{ protectedByFriend, now };
+    return protectedByFriend;
 }
 
 // Logs-in bots in 4 phases. Phase 1 logs Alliance bots up to how much is expected according to the faction ratio,
@@ -1371,16 +1474,22 @@ bool RandomPlayerbotMgr::ProcessBot(uint32 bot)
                            std::max(12, static_cast<int>(randomBotUpdateInterval * 2)));
         SetEventValue(bot, "update", 1, randomTime);
 
-        // do not randomize or teleport immediately after server start (prevent lagging)
+        // do not randomize or teleport immediately after server start (prevent lagging), and never
+        // schedule quick random lifecycle work for friend-protected player companions.
+        bool const persistentCompanion = IsPersistentCompanion(bot);
         if (!GetEventValue(bot, "randomize"))
         {
-            randomTime = urand(3, std::max(4, static_cast<int>(randomBotUpdateInterval * 0.4)));
+            randomTime = persistentCompanion
+                ? sPlayerbotAIConfig.maxRandomBotRandomizeTime
+                : urand(3, std::max(4, static_cast<int>(randomBotUpdateInterval * 0.4)));
             ScheduleRandomize(bot, randomTime);
         }
         if (!GetEventValue(bot, "teleport"))
         {
-            randomTime = urand(std::max(7, static_cast<int>(randomBotUpdateInterval * 0.7)),
-                               std::max(14, static_cast<int>(randomBotUpdateInterval * 1.4)));
+            randomTime = persistentCompanion
+                ? sPlayerbotAIConfig.maxRandomBotTeleportInterval
+                : urand(std::max(7, static_cast<int>(randomBotUpdateInterval * 0.7)),
+                        std::max(14, static_cast<int>(randomBotUpdateInterval * 1.4)));
             ScheduleTeleport(bot, randomTime);
         }
 
@@ -1456,6 +1565,9 @@ bool RandomPlayerbotMgr::ProcessBot(Player* bot)
     if (bot->InBattlegroundQueue())
         return false;
 
+    if (IsInWintergraspWar(bot))
+        return false;
+
      uint32 botId = bot->GetGUID().GetCounter();
 
     // if death revive
@@ -1505,10 +1617,17 @@ bool RandomPlayerbotMgr::ProcessBot(Player* bot)
 
     if (idleBot)
     {
+        bool const persistentCompanion = IsPersistentCompanion(bot);
+
         // randomize
         uint32 randomize = GetEventValue(botId, "randomize");
         if (!randomize)
         {
+            if (persistentCompanion)
+            {
+                ScheduleRandomize(botId, sPlayerbotAIConfig.maxRandomBotRandomizeTime);
+                return false;
+            }
             // bool randomiser = true;
             // if (player->GetGuildId())
             // {
@@ -1550,6 +1669,11 @@ bool RandomPlayerbotMgr::ProcessBot(Player* bot)
         uint32 teleport = GetEventValue(botId, "teleport");
         if (!teleport)
         {
+            if (persistentCompanion)
+            {
+                ScheduleTeleport(botId, sPlayerbotAIConfig.maxRandomBotTeleportInterval);
+                return false;
+            }
             LOG_DEBUG("playerbots", "Bot #{} <{}>: teleport for level and refresh", botId, bot->GetName());
             Refresh(bot);
             RandomTeleportForLevel(bot);
@@ -1577,8 +1701,8 @@ void RandomPlayerbotMgr::Revive(Player* player)
 
 void RandomPlayerbotMgr::RandomTeleport(Player* bot, std::vector<WorldLocation>& locs, bool hearth)
 {
-    // ignore when alrdy teleported or not in the world yet.
-    if (bot->IsBeingTeleported() || !bot->IsInWorld())
+    // ignore when already teleported, not in the world yet, or protected as a player companion.
+    if (!bot || IsPersistentCompanion(bot) || bot->IsBeingTeleported() || !bot->IsInWorld())
         return;
 
     // no teleport / movement update when rooted.
@@ -1591,6 +1715,10 @@ void RandomPlayerbotMgr::RandomTeleport(Player* bot, std::vector<WorldLocation>&
 
     // ignore when in battle grounds or arena.
     if (bot->InBattleground() || bot->InArena())
+        return;
+
+    // ignore Wintergrasp combatants (Battlefield, not a Battleground — see above).
+    if (IsInWintergraspWar(bot))
         return;
 
     // ignore when in group (e.g. world, dungeons, raids) and leader is not a player.
@@ -1767,7 +1895,7 @@ void RandomPlayerbotMgr::Init()
 
 void RandomPlayerbotMgr::RandomTeleportForLevel(Player* bot)
 {
-    if (bot->InBattleground())
+    if (!bot || IsPersistentCompanion(bot) || bot->InBattleground())
         return;
 
     if (bot->GetLevel() >= 10 && urand(0, 100) < sPlayerbotAIConfig.probTeleToBankers * 100)
@@ -1789,7 +1917,7 @@ void RandomPlayerbotMgr::RandomTeleportForLevel(Player* bot)
 
 void RandomPlayerbotMgr::RandomTeleportGrindForLevel(Player* bot)
 {
-    if (bot->InBattleground())
+    if (!bot || IsPersistentCompanion(bot) || bot->InBattleground())
         return;
 
     std::vector<WorldLocation> locs = sTravelMgr.GetTeleportLocations(bot);
@@ -1801,7 +1929,7 @@ void RandomPlayerbotMgr::RandomTeleportGrindForLevel(Player* bot)
 
 void RandomPlayerbotMgr::RandomTeleport(Player* bot)
 {
-    if (bot->InBattleground())
+    if (!bot || IsPersistentCompanion(bot) || bot->InBattleground())
         return;
 
     PerfMonitorOperation* pmo = sPerfMonitor.start(PERF_MON_RNDBOT, "RandomTeleport");
@@ -1840,7 +1968,7 @@ void RandomPlayerbotMgr::RandomTeleport(Player* bot)
 
 void RandomPlayerbotMgr::Randomize(Player* bot)
 {
-    if (bot->InBattleground())
+    if (!bot || IsPersistentCompanion(bot) || bot->InBattleground())
         return;
 
     if (bot->GetLevel() < 3 || (bot->GetLevel() < 56 && bot->getClass() == CLASS_DEATH_KNIGHT))
@@ -1862,6 +1990,9 @@ void RandomPlayerbotMgr::Randomize(Player* bot)
 
 void RandomPlayerbotMgr::IncreaseLevel(Player* bot)
 {
+    if (!bot || IsPersistentCompanion(bot))
+        return;
+
     uint32 maxLevel = sPlayerbotAIConfig.randomBotMaxLevel;
     if (maxLevel > sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL))
         maxLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
@@ -1885,6 +2016,9 @@ void RandomPlayerbotMgr::IncreaseLevel(Player* bot)
 
 void RandomPlayerbotMgr::RandomizeFirst(Player* bot)
 {
+    if (!bot || IsPersistentCompanion(bot))
+        return;
+
     PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
     if (!botAI)
         return;
@@ -1980,6 +2114,9 @@ void RandomPlayerbotMgr::RandomizeFirst(Player* bot)
 
 void RandomPlayerbotMgr::RandomizeMin(Player* bot)
 {
+    if (!bot || IsPersistentCompanion(bot))
+        return;
+
     PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
     if (!botAI)
         return;
@@ -2587,7 +2724,9 @@ void RandomPlayerbotMgr::OnPlayerLogin(Player* player)
             PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
             if (botAI && member == player && (!botAI->GetMaster() || GET_PLAYERBOT_AI(botAI->GetMaster())))
             {
-                if (!bot->InBattleground())
+                // Battlefield raids (Wintergrasp) are not ownership: don't hand the bot to a
+                // real player who merely shares the war raid (see UpdateAIGroupMaster).
+                if (!bot->InBattleground() && !group->isBFGroup())
                 {
                     botAI->SetMaster(player);
                     botAI->ResetStrategies();
@@ -3026,6 +3165,9 @@ void RandomPlayerbotMgr::ChangeStrategyOnce(Player* player)
 
 void RandomPlayerbotMgr::RandomTeleportForRpg(Player* bot)
 {
+    if (!bot || IsPersistentCompanion(bot))
+        return;
+
     uint32 race = bot->getRace();
     uint32 level = bot->GetLevel();
     LOG_DEBUG("playerbots", "Random teleporting bot {} for RPG ({} locations available)", bot->GetName().c_str(),

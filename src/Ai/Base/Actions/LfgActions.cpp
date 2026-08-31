@@ -85,6 +85,9 @@ uint32 LfgJoinAction::GetRoles()
 
 bool LfgJoinAction::JoinLFG()
 {
+    if (RandomPlayerbotMgr::instance().IsPersistentCompanion(bot))
+        return false;
+
     // check if already in lfg
     LfgState state = sLFGMgr->GetState(bot->GetGUID());
     if (state != LFG_STATE_NONE)
@@ -338,6 +341,9 @@ bool LfgJoinAction::isUseful()
         return false;
 
     if (!RandomPlayerbotMgr::instance().IsRandomBot(bot))
+        return false;
+
+    if (RandomPlayerbotMgr::instance().IsPersistentCompanion(bot))
         return false;
 
     Map* map = bot->GetMap();

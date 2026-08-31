@@ -73,6 +73,9 @@ bool BGJoinAction::gatherArenaTeam(ArenaType type)
     for (ArenaTeam::MemberList::iterator itr = arenateam->GetMembers().begin(); itr != arenateam->GetMembers().end();
          ++itr)
     {
+        if (sRandomPlayerbotMgr.IsPersistentCompanion(itr->Guid.GetCounter()))
+            continue;
+
         bool offline = false;
         Player* member = ObjectAccessor::FindConnectedPlayer(itr->Guid);
         if (!member)
@@ -315,6 +318,10 @@ bool BGJoinAction::isUseful()
     if (!sPlayerbotAIConfig.randomBotJoinBG)
         return false;
 
+    // friend-listed random bots are player companions, not BG filler
+    if (sRandomPlayerbotMgr.IsPersistentCompanion(bot))
+        return false;
+
     // can't queue while in BG/Arena
     if (bot->InBattleground())
         return false;
@@ -383,8 +390,9 @@ bool BGJoinAction::isUseful()
 
 bool BGJoinAction::JoinQueue(uint32 type)
 {
-    // ignore if player is already in BG, is logging out, or already being teleport
-    if (!bot || (!bot->IsInWorld() && !bot->IsBeingTeleported()) || bot->InBattleground())
+    // ignore if player is already in BG, is logging out, being teleported, or protected as a player companion
+    if (!bot || sRandomPlayerbotMgr.IsPersistentCompanion(bot) || (!bot->IsInWorld() && !bot->IsBeingTeleported()) ||
+        bot->InBattleground())
         return false;
 
     // get BG TypeId
