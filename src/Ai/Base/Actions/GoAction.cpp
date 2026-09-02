@@ -24,6 +24,18 @@ bool GoAction::Execute(Event event)
         return false;
 
     std::string const param = event.getParam();
+    bool const pvpFollowOverride = botAI->HasStrategy("follow", BOT_STATE_COMBAT) &&
+        (bot->InBattleground() || bot->InArena() || bot->IsPvP() || master->IsPvP());
+
+    if (param.empty() && pvpFollowOverride)
+    {
+        botAI->ChangeStrategy("-follow,-stay,-passive", BOT_STATE_NON_COMBAT);
+        botAI->ChangeStrategy("-follow,-stay,-passive", BOT_STATE_COMBAT);
+        botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets")->Reset();
+        botAI->TellMasterNoFacing("Back to PvP mode");
+        return true;
+    }
+
     if (param == "?")
     {
         float x = bot->GetPositionX();

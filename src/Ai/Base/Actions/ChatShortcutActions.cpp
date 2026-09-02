@@ -52,7 +52,16 @@ bool FollowChatShortcutAction::Execute(Event /*event*/)
 
     // botAI->Reset();
     botAI->ChangeStrategy("+follow,-passive,-grind,-move from group", BOT_STATE_NON_COMBAT);
-    botAI->ChangeStrategy("-stay,-follow,-passive,-grind,-move from group", BOT_STATE_COMBAT);
+
+    // Normal follow keeps combat AI free to finish fights. In PvP, however, battleground/objective
+    // tactics can make grouped bots run away to their own objective while the human master has to
+    // chase them. Treat "follow" as an explicit PvP leash override: stay near the master in combat
+    // too, until the player says "go".
+    bool const pvpFollowOverride = bot->InBattleground() || bot->InArena() || bot->IsPvP() || master->IsPvP();
+    botAI->ChangeStrategy(pvpFollowOverride
+        ? "+follow,-stay,-passive,-grind,-move from group"
+        : "-stay,-follow,-passive,-grind,-move from group", BOT_STATE_COMBAT);
+
     botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets")->Reset();
 
     PositionMap& posMap = context->GetValue<PositionMap&>("position")->Get();

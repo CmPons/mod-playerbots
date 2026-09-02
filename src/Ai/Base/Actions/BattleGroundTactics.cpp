@@ -1558,6 +1558,15 @@ bool BGTactics::eyJumpDown()
 //
 // actual bg tactics below
 //
+static bool HasPvPFollowOverride(PlayerbotAI* botAI, Player* bot)
+{
+    if (!botAI || !bot || !botAI->HasStrategy("follow", BOT_STATE_COMBAT))
+        return false;
+
+    Player* master = botAI->GetMaster();
+    return master && (bot->InBattleground() || bot->InArena() || bot->IsPvP() || master->IsPvP());
+}
+
 bool BGTactics::Execute(Event /*event*/)
 {
     Battleground* bg = bot->GetBattleground();
@@ -1576,6 +1585,9 @@ bool BGTactics::Execute(Event /*event*/)
         botAI->ResetStrategies();
         return false;
     }
+
+    if (HasPvPFollowOverride(botAI, bot))
+        return false;
 
     if (bg->GetStatus() == STATUS_IN_PROGRESS)
         botAI->ChangeStrategy("-buff", BOT_STATE_NON_COMBAT);
@@ -4307,6 +4319,9 @@ bool ArenaTactics::Execute(Event /*event*/)
         return BGStatusAction::LeaveBG(botAI);
 
     if (bg->GetStatus() != STATUS_IN_PROGRESS)
+        return false;
+
+    if (HasPvPFollowOverride(botAI, bot))
         return false;
 
     if (bot->isDead())
