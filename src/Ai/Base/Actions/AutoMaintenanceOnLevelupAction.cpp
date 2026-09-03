@@ -172,6 +172,6 @@ void AutoMaintenanceOnLevelupAction::AutoUpgradeEquip()
     factory.InitConsumables();
     factory.InitPotions();
 
-    if (sPlayerbotAIConfig.autoUpgradeEquip)
+    if (sPlayerbotAIConfig.autoUpgradeEquip && !sRandomPlayerbotMgr.IsPersistentCompanion(bot))
         factory.InitEquipment(true);
 }
