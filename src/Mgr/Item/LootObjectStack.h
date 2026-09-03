@@ -34,6 +34,7 @@ public:
 
     bool IsEmpty() { return !guid; }
     bool IsLootPossible(Player* bot);
+    bool IsSafeToLoot(Player* bot);
     void Refresh(Player* bot, ObjectGuid guid);
     WorldObject* GetWorldObject(Player* bot);
     ObjectGuid guid;
@@ -80,6 +81,7 @@ public:
 
 private:
     LootObject GetNearest(float maxDistance = 0);
+    void RefreshLootTarget(ObjectGuid guid);
 
     Player* bot;
     LootTargetList availableLoot;
