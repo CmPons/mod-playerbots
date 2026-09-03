@@ -22,6 +22,8 @@ public:
 private:
     bool ExecuteBank(std::string const text, Unit* bank);
     void ListItems();
+    bool BankDefaultItems();
+    bool ShouldBankByDefault(Item const* item);
     bool Withdraw(uint32 itemid);
     bool Deposit(Item* pItem);
     Item* FindItemInBank(uint32 ItemId);

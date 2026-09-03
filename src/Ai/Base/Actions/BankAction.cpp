@@ -8,8 +8,11 @@
 
 #include "Event.h"
 #include "ItemCountValue.h"
+#include "ItemUsageValue.h"
 #include "PlayerbotTextMgr.h"
 #include "Playerbots.h"
+
+#include <set>
 
 bool BankAction::Execute(Event event)
 {
@@ -32,7 +35,10 @@ bool BankAction::Execute(Event event)
 
 bool BankAction::ExecuteBank(std::string const text, Unit* /*bank*/)
 {
-    if (text.empty() || text == "?")
+    if (text.empty() || text == "all")
+        return BankDefaultItems();
+
+    if (text == "?")
     {
         ListItems();
         return true;
@@ -45,7 +51,7 @@ bool BankAction::ExecuteBank(std::string const text, Unit* /*bank*/)
         for (std::vector<Item*>::iterator i = found.begin(); i != found.end(); i++)
         {
             Item* item = *i;
-            result &= Withdraw(item->GetTemplate()->ItemId);
+            result = Withdraw(item->GetTemplate()->ItemId) || result;
         }
     }
     else
@@ -60,11 +66,88 @@ bool BankAction::ExecuteBank(std::string const text, Unit* /*bank*/)
             if (!item)
                 continue;
 
-            result &= Deposit(item);
+            result = Deposit(item) || result;
         }
     }
 
     return result;
+}
+
+bool BankAction::BankDefaultItems()
+{
+    std::vector<Item*> found;
+    std::set<ObjectGuid> seen;
+
+    class DefaultBankItemVisitor : public IterateItemsVisitor
+    {
+    public:
+        DefaultBankItemVisitor(BankAction* action, std::vector<Item*>& found, std::set<ObjectGuid>& seen)
+            : action(action), found(found), seen(seen)
+        {
+        }
+
+        bool Visit(Item* item) override
+        {
+            if (item && action->ShouldBankByDefault(item) && seen.insert(item->GetGUID()).second)
+                found.push_back(item);
+
+            return true;
+        }
+
+    private:
+        BankAction* action;
+        std::vector<Item*>& found;
+        std::set<ObjectGuid>& seen;
+    } visitor(this, found, seen);
+
+    IterateItems(&visitor, ITERATE_ITEMS_IN_BAGS);
+
+    bool result = false;
+    for (Item* item : found)
+        result = Deposit(item) || result;
+
+    if (!result)
+        botAI->TellMaster("I have nothing useful to bank");
+
+    return result;
+}
+
+bool BankAction::ShouldBankByDefault(Item const* item)
+{
+    if (!item || item->IsInTrade())
+        return false;
+
+    ItemTemplate const* proto = item->GetTemplate();
+    if (!proto)
+        return false;
+
+    bool const longTermItemClass = proto->Class == ITEM_CLASS_TRADE_GOODS || proto->Class == ITEM_CLASS_REAGENT ||
+                                   proto->Class == ITEM_CLASS_RECIPE || proto->Class == ITEM_CLASS_GEM;
+    if (!longTermItemClass)
+        return false;
+
+    ItemUsage const usage = context->GetValue<ItemUsage>("item usage", proto->ItemId)->Get();
+    switch (usage)
+    {
+        case ITEM_USAGE_EQUIP:
+        case ITEM_USAGE_REPLACE:
+        case ITEM_USAGE_BAD_EQUIP:
+        case ITEM_USAGE_BROKEN_EQUIP:
+        case ITEM_USAGE_QUEST:
+        case ITEM_USAGE_USE:
+        case ITEM_USAGE_KEEP:
+        case ITEM_USAGE_VENDOR:
+        case ITEM_USAGE_AMMO:
+            return false;
+        case ITEM_USAGE_SKILL:
+        case ITEM_USAGE_GUILD_TASK:
+        case ITEM_USAGE_DISENCHANT:
+        case ITEM_USAGE_AH:
+        case ITEM_USAGE_NONE:
+            return true;
+    }
+
+    return false;
 }
 
 bool BankAction::Withdraw(uint32 itemid)
