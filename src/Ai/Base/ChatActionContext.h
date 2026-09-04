@@ -48,6 +48,7 @@
 #include "QueryItemUsageAction.h"
 #include "QueryQuestAction.h"
 #include "RangeAction.h"
+#include "RedeemTokenAction.h"
 #include "ReleaseSpiritAction.h"
 #include "RepairAllAction.h"
 #include "ResetAiAction.h"
@@ -122,6 +123,7 @@ public:
         creators["teleport"] = &ChatActionContext::teleport;
         creators["taxi"] = &ChatActionContext::taxi;
         creators["repair"] = &ChatActionContext::repair;
+        creators["redeem tokens"] = &ChatActionContext::redeem_tokens;
         creators["emblems"] = &ChatActionContext::emblems;
         creators["use"] = &ChatActionContext::use;
         creators["item count"] = &ChatActionContext::item_count;
@@ -281,6 +283,7 @@ private:
     static Action* item_count(PlayerbotAI* botAI) { return new TellItemCountAction(botAI); }
     static Action* use(PlayerbotAI* botAI) { return new UseItemAction(botAI); }
     static Action* repair(PlayerbotAI* botAI) { return new RepairAllAction(botAI); }
+    static Action* redeem_tokens(PlayerbotAI* botAI) { return new RedeemTokenAction(botAI); }
     static Action* emblems(PlayerbotAI* botAI) { return new TellEmblemsAction(botAI); }
     static Action* taxi(PlayerbotAI* botAI) { return new TaxiAction(botAI); }
     static Action* teleport(PlayerbotAI* botAI) { return new TeleportAction(botAI); }

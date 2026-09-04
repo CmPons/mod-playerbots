@@ -10,6 +10,9 @@
 #include "Event.h"
 #include "ItemUsageValue.h"
 #include "Playerbots.h"
+#include "StatsWeightCalculator.h"
+#include "TokenItemResolver.h"
+
 
 bool QueryItemUsageAction::Execute(Event event)
 {
@@ -63,6 +66,13 @@ uint32 QueryItemUsageAction::GetCount(ItemTemplate const* item)
 std::string const QueryItemUsageAction::QueryItem(ItemTemplate const* item, uint32 count, uint32 total)
 {
     std::ostringstream out;
+    std::string tokenReward = QueryTokenRewardItem(item);
+    if (!tokenReward.empty())
+    {
+        out << chat->FormatItem(item, count, total) << ": " << tokenReward;
+        return out.str();
+    }
+
     std::string usage = QueryItemUsage(item);
     std::string const quest = QueryQuestItem(item->ItemId);
     std::string const price = QueryItemPrice(item);
@@ -115,6 +125,93 @@ std::string const QueryItemUsageAction::QueryItemUsage(ItemTemplate const* item)
     }
 
     return "";
+}
+
+std::string const QueryItemUsageAction::QueryTokenRewardItem(ItemTemplate const* item)
+{
+    if (!item)
+        return "";
+
+    std::vector<TokenRewardCandidate> const allCandidates = TokenItemResolver::FindTokenRewards(item->ItemId);
+    if (allCandidates.empty())
+        return "";
+
+    std::vector<TokenRewardCandidate> const usableCandidates = TokenItemResolver::FindUsableTokenRewards(bot, item->ItemId);
+    if (usableCandidates.empty())
+    {
+        uint32 classMask = 0;
+        for (TokenRewardCandidate const& candidate : allCandidates)
+        {
+            Quest const* quest = sObjectMgr->GetQuestTemplate(candidate.questId);
+            if (quest && quest->GetRequiredClasses())
+            {
+                classMask |= quest->GetRequiredClasses();
+                continue;
+            }
+
+            ItemTemplate const* reward = sObjectMgr->GetItemTemplate(candidate.rewardItemId);
+            if (reward && reward->AllowableClass > 0)
+                classMask |= static_cast<uint32>(reward->AllowableClass);
+        }
+
+        std::ostringstream out;
+        out << "Token for " << TokenItemResolver::DescribeClasses(classMask);
+        return out.str();
+    }
+
+    TokenRewardCandidate bestCandidate;
+    ItemUsage bestUsage = ITEM_USAGE_NONE;
+    float bestScore = 0.0f;
+    StatsWeightCalculator calc(bot);
+    calc.SetItemSetBonus(false);
+    calc.SetOverflowPenalty(false);
+
+    for (TokenRewardCandidate const& candidate : usableCandidates)
+    {
+        ItemTemplate const* reward = sObjectMgr->GetItemTemplate(candidate.rewardItemId);
+        if (!reward)
+            continue;
+
+        ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", std::to_string(candidate.rewardItemId));
+        float const score = calc.CalculateItem(candidate.rewardItemId);
+
+        bool better = false;
+        if (bestCandidate.rewardItemId == 0)
+            better = true;
+        else if (usage == ITEM_USAGE_EQUIP || usage == ITEM_USAGE_REPLACE)
+            better = (bestUsage != ITEM_USAGE_EQUIP && bestUsage != ITEM_USAGE_REPLACE) || score > bestScore;
+        else if (bestUsage != ITEM_USAGE_EQUIP && bestUsage != ITEM_USAGE_REPLACE && score > bestScore)
+            better = true;
+
+        if (better)
+        {
+            bestCandidate = candidate;
+            bestUsage = usage;
+            bestScore = score;
+        }
+    }
+
+    if (!bestCandidate.rewardItemId)
+        return "";
+
+    ItemTemplate const* reward = sObjectMgr->GetItemTemplate(bestCandidate.rewardItemId);
+    Quest const* quest = sObjectMgr->GetQuestTemplate(bestCandidate.questId);
+    std::string rewardUsage = reward ? QueryItemUsage(reward) : "";
+    if (rewardUsage.empty())
+        rewardUsage = "Useless";
+
+    std::ostringstream out;
+    out << "Token -> " << chat->FormatItem(reward) << ": " << rewardUsage;
+    if (quest)
+        out << ", " << chat->FormatQuest(quest);
+    if (!bestCandidate.questGiverName.empty())
+        out << ", " << bestCandidate.questGiverName;
+    if (quest && !TokenItemResolver::HasRequiredItems(bot, quest))
+        out << ", needs more turn-in items";
+    if (bestCandidate.IsVendorReward() && !TokenItemResolver::HasRequiredVendorCost(bot, bestCandidate))
+        out << ", needs more vendor cost items";
+
+    return out.str();
 }
 
 std::string const QueryItemUsageAction::QueryItemPrice(ItemTemplate const* item)

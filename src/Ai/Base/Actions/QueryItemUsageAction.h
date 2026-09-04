@@ -28,6 +28,7 @@ protected:
     uint32 GetCount(ItemTemplate const* item);
     std::string const QueryItem(ItemTemplate const* item, uint32 count, uint32 total);
     std::string const QueryItemUsage(ItemTemplate const* item);
+    std::string const QueryTokenRewardItem(ItemTemplate const* item);
     std::string const QueryItemPrice(ItemTemplate const* item);
     std::string const QueryQuestItem(uint32 itemId, Quest const* questTemplate, QuestStatusData const* questStatus);
     std::string const QueryQuestItem(uint32 itemId);

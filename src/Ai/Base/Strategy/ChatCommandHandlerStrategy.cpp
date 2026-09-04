@@ -76,6 +76,10 @@ void ChatCommandHandlerStrategy::InitTriggers(std::vector<TriggerNode*>& trigger
     triggers.push_back(new TriggerNode("dps", { NextAction("tell estimated dps", relevance) }));
     triggers.push_back(new TriggerNode("disperse", { NextAction("disperse set", relevance) }));
     triggers.push_back(new TriggerNode("qi", { NextAction("query item usage", relevance) }));
+    triggers.push_back(new TriggerNode("redeem", { NextAction("redeem tokens", relevance) }));
+    triggers.push_back(new TriggerNode("redeem tokens", { NextAction("redeem tokens", relevance) }));
+    triggers.push_back(new TriggerNode("turnin tokens", { NextAction("redeem tokens", relevance) }));
+    triggers.push_back(new TriggerNode("turn in tokens", { NextAction("redeem tokens", relevance) }));
     triggers.push_back(new TriggerNode("focus heal", { NextAction("focus heal targets", relevance) }));
 }
 
@@ -103,6 +107,7 @@ ChatCommandHandlerStrategy::ChatCommandHandlerStrategy(PlayerbotAI* botAI) : Pas
     supported.push_back("taxi");
     supported.push_back("repair");
     supported.push_back("emblems");
+    supported.push_back("redeem tokens");
     supported.push_back("talents");
     supported.push_back("spells");
     supported.push_back("co");

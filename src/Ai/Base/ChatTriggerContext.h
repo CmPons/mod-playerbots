@@ -42,6 +42,10 @@ public:
         creators["teleport"] = &ChatTriggerContext::teleport;
         creators["taxi"] = &ChatTriggerContext::taxi;
         creators["repair"] = &ChatTriggerContext::repair;
+        creators["redeem"] = &ChatTriggerContext::redeem_tokens;
+        creators["redeem tokens"] = &ChatTriggerContext::redeem_tokens;
+        creators["turnin tokens"] = &ChatTriggerContext::redeem_tokens;
+        creators["turn in tokens"] = &ChatTriggerContext::redeem_tokens;
         creators["emblems"] = &ChatTriggerContext::emblems;
         creators["u"] = &ChatTriggerContext::use;
         creators["use"] = &ChatTriggerContext::use;
@@ -239,6 +243,7 @@ private:
     static Trigger* item_count(PlayerbotAI* botAI) { return new ChatCommandTrigger(botAI, "c"); }
     static Trigger* use(PlayerbotAI* botAI) { return new ChatCommandTrigger(botAI, "use"); }
     static Trigger* repair(PlayerbotAI* botAI) { return new ChatCommandTrigger(botAI, "repair"); }
+    static Trigger* redeem_tokens(PlayerbotAI* botAI) { return new ChatCommandTrigger(botAI, "redeem tokens"); }
     static Trigger* emblems(PlayerbotAI* botAI) { return new ChatCommandTrigger(botAI, "emblems"); }
     static Trigger* taxi(PlayerbotAI* botAI) { return new ChatCommandTrigger(botAI, "taxi"); }
     static Trigger* teleport(PlayerbotAI* botAI) { return new ChatCommandTrigger(botAI, "teleport"); }

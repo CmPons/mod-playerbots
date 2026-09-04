@@ -17,6 +17,7 @@
 #include "RandomItemMgr.h"
 #include "ServerFacade.h"
 #include "StatsWeightCalculator.h"
+#include "TokenItemResolver.h"
 
 ItemUsage ItemUsageValue::Calculate()
 {
@@ -94,6 +95,23 @@ ItemUsage ItemUsageValue::Calculate()
 
     if (bot->GetGuildId() && GuildTaskMgr::instance().IsGuildTaskItem(itemId, bot->GetGuildId()))
         return ITEM_USAGE_GUILD_TASK;
+
+    ItemUsage tokenRewardUsage = ITEM_USAGE_NONE;
+    for (TokenRewardCandidate const& candidate : TokenItemResolver::FindUsableTokenRewards(bot, itemId))
+    {
+        ItemTemplate const* rewardProto = sObjectMgr->GetItemTemplate(candidate.rewardItemId);
+        ItemUsage rewardUsage = QueryItemUsageForEquip(rewardProto);
+        if (rewardUsage == ITEM_USAGE_EQUIP || rewardUsage == ITEM_USAGE_REPLACE)
+            return rewardUsage;
+
+        if (rewardUsage == ITEM_USAGE_BAD_EQUIP && tokenRewardUsage == ITEM_USAGE_NONE)
+            tokenRewardUsage = rewardUsage;
+        else if (rewardUsage != ITEM_USAGE_NONE && tokenRewardUsage == ITEM_USAGE_NONE)
+            tokenRewardUsage = rewardUsage;
+    }
+
+    if (tokenRewardUsage != ITEM_USAGE_NONE)
+        return tokenRewardUsage;
 
     ItemUsage equip = QueryItemUsageForEquip(proto, randomPropertyId);
     if (equip != ITEM_USAGE_NONE)

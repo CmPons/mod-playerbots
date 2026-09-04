@@ -13,6 +13,7 @@
 #include "ObjectMgr.h"
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
+#include "TokenItemResolver.h"
 
 bool LootRollAction::Execute(Event /*event*/)
 {
@@ -48,8 +49,11 @@ bool LootRollAction::Execute(Event /*event*/)
 
         ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", itemUsageParam);
 
+        bool const hasResolvedTokenRewards = !TokenItemResolver::FindTokenRewards(itemId).empty();
+        if (hasResolvedTokenRewards)
+            vote = CalculateRollVote(proto, usage);
         // Armor Tokens are classed as MISC JUNK (Class 15, Subclass 0), luckily no other items I found have class bits and epic quality.
-        if (proto->Class == ITEM_CLASS_MISC && proto->SubClass == ITEM_SUBCLASS_JUNK && proto->Quality == ITEM_QUALITY_EPIC)
+        else if (proto->Class == ITEM_CLASS_MISC && proto->SubClass == ITEM_SUBCLASS_JUNK && proto->Quality == ITEM_QUALITY_EPIC)
         {
             if (CanBotUseToken(proto, bot))
                 vote = NEED; // Eligible for "Need"
