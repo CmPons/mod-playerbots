@@ -165,6 +165,10 @@ ItemUsage ItemUsageValue::Calculate()
         if (ammoUsage != ITEM_USAGE_NONE)
             return ammoUsage;
     }
+
+    if (IsClassUsableSetItem(proto))
+        return ITEM_USAGE_KEEP;
+
     // Need to add something like free bagspace or item value.
     if (proto->SellPrice > 0)
     {
@@ -685,6 +689,25 @@ bool ItemUsageValue::IsItemUsefulForSkill(ItemTemplate const* proto)
     }
 
     return false;
+}
+
+bool ItemUsageValue::IsClassUsableSetItem(ItemTemplate const* proto)
+{
+    if (!proto || !proto->ItemSet)
+        return false;
+
+    if (proto->InventoryType == INVTYPE_NON_EQUIP)
+        return false;
+
+    if (proto->Class != ITEM_CLASS_ARMOR && proto->Class != ITEM_CLASS_WEAPON)
+        return false;
+
+    if (bot->BotCanUseItem(proto) != EQUIP_ERR_OK)
+        return false;
+
+    // If it already came through as not an upgrade, keep class-usable set gear for collection/offspec
+    // instead of letting sell/AH heuristics discard old raid tier pieces.
+    return true;
 }
 
 bool ItemUsageValue::IsItemNeededForUsefullSpell(ItemTemplate const* proto, bool checkAllReagents)
