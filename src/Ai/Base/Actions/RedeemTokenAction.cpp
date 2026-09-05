@@ -130,7 +130,7 @@ bool RedeemTokenAction::RedeemVendorTokens()
             TokenRewardCandidate bestCandidate;
             float bestScore = 0.0f;
             StatsWeightCalculator calc(bot);
-            calc.SetItemSetBonus(false);
+            calc.SetItemSetBonus(true);
             calc.SetOverflowPenalty(false);
 
             for (TokenRewardCandidate const& candidate : TokenItemResolver::FindUsableTokenRewards(bot, itemId))

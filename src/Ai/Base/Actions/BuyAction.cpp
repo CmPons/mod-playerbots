@@ -64,7 +64,7 @@ bool BuyAction::Execute(Event event)
                 continue;
 
             StatsWeightCalculator calculator(bot);
-            calculator.SetItemSetBonus(false);
+            calculator.SetItemSetBonus(true);
             calculator.SetOverflowPenalty(false);
 
             std::sort(m_items_sorted.begin(), m_items_sorted.end(),

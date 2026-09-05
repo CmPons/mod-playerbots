@@ -5,11 +5,13 @@
 
 #include "StatsWeightCalculator.h"
 
+#include <algorithm>
 #include <memory>
 
 #include "AiFactory.h"
 #include "DBCStores.h"
 #include "ItemEnchantmentMgr.h"
+#include "Item.h"
 #include "ItemTemplate.h"
 #include "ObjectMgr.h"
 #include "PlayerbotAI.h"
@@ -34,6 +36,21 @@ constexpr uint32 SPELL_POLEAXE_SPECIALIZATION = 12785;
 constexpr uint32 SPELL_NERVES_OF_COLD_STEEL = 50138;
 constexpr uint32 SPELL_SHADOW_FOCUS = 15835;
 constexpr uint32 SPELL_ARCANE_FOCUS = 12840;
+
+bool IsItemEquipped(Player* player, uint32 itemId)
+{
+    if (!player || !itemId)
+        return false;
+
+    for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+    {
+        if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            if (item->GetEntry() == itemId)
+                return true;
+    }
+
+    return false;
+}
 }
 
 template <size_t Size>
@@ -567,45 +584,59 @@ void StatsWeightCalculator::GenerateAdditionalWeights(Player* player)
 
 void StatsWeightCalculator::CalculateItemSetMod(Player* player, ItemTemplate const* proto)
 {
-    uint32 itemSet = proto->ItemSet;
+    uint32 const itemSet = proto->ItemSet;
     if (!itemSet)
         return;
 
-    float multiplier = 1.0f;
-    size_t i = 0;
-    for (i = 0; i < player->ItemSetEff.size(); i++)
+    ItemSetEntry const* setEntry = sItemSetStore.LookupEntry(itemSet);
+    if (!setEntry)
+        return;
+
+    uint32 currentCount = 0;
+    for (ItemSetEffect const* eff : player->ItemSetEff)
     {
-        if (player->ItemSetEff[i])
+        if (eff && eff->setid == itemSet)
         {
-            ItemSetEffect* eff = player->ItemSetEff[i];
-
-            uint32 setId = eff->setid;
-            if (itemSet != setId)
-                continue;
-
-            const ItemSetEntry* setEntry = sItemSetStore.LookupEntry(setId);
-            if (!setEntry)
-                continue;
-
-            uint32 itemCount = eff->item_count;
-            uint32 max_items = 0;
-            for (size_t j = 0; j < MAX_ITEM_SET_SPELLS; j++)
-                max_items = std::max(max_items, setEntry->items_to_triggerspell[j]);
-            if (itemCount < max_items)
-            {
-                multiplier += 0.1f * itemCount;  // 10% bonus for each item already equipped
-            }
-            else
-            {
-                multiplier = 1.0f;  // All item set effect has been triggerred
-            }
+            currentCount = eff->item_count;
             break;
         }
     }
 
-    if (i == player->ItemSetEff.size())
-        multiplier = 1.05f;  // this is the first item in the item set
+    uint32 maxItems = 0;
+    uint32 nextBonusAt = 0;
+    for (size_t i = 0; i < MAX_ITEM_SET_SPELLS; ++i)
+    {
+        uint32 const bonusAt = setEntry->items_to_triggerspell[i];
+        if (!bonusAt)
+            continue;
 
+        maxItems = std::max(maxItems, bonusAt);
+        if (bonusAt > currentCount && (!nextBonusAt || bonusAt < nextBonusAt))
+            nextBonusAt = bonusAt;
+    }
+
+    if (!maxItems)
+        return;
+
+    // Score unequipped set pieces as the set state they would create.  This lets tier/token items beat
+    // small raw-stat sidegrades when they unlock or move a bot toward meaningful set bonuses.
+    uint32 const candidateCount = currentCount + (IsItemEquipped(player, proto->ItemId) ? 0 : 1);
+
+    float multiplier = 1.08f + 0.07f * std::min(candidateCount, maxItems);
+
+    if (nextBonusAt)
+    {
+        if (candidateCount >= nextBonusAt)
+            multiplier += 0.25f;       // This item completes a new set-bonus threshold.
+        else if (candidateCount + 1 >= nextBonusAt)
+            multiplier += 0.10f;       // This item puts the bot one piece away.
+    }
+    else
+    {
+        multiplier = 1.05f;            // Full set already active: keep only a small cohesion premium.
+    }
+
+    multiplier = std::clamp(multiplier, 1.0f, 1.75f);
     weight_ *= multiplier;
 }
 

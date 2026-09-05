@@ -151,7 +151,7 @@ void EquipAction::EquipItem(Item* item)
 
             // Set up the stats calculator once and reuse results for performance
             StatsWeightCalculator calculator(bot);
-            calculator.SetItemSetBonus(false);
+            calculator.SetItemSetBonus(true);
             calculator.SetOverflowPenalty(false);
 
             // Calculate item scores once and store them
@@ -276,7 +276,7 @@ void EquipAction::EquipItem(Item* item)
                 {
                     // Both slots are full - pick the worst item to replace, but only if new item is better
                     StatsWeightCalculator calc(bot);
-                    calc.SetItemSetBonus(false);
+                    calc.SetItemSetBonus(true);
                     calc.SetOverflowPenalty(false);
 
                     // Calculate new item score with random properties

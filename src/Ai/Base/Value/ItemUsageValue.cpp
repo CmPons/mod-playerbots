@@ -237,7 +237,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemTemplate const* itemProto, 
     bool shouldEquip = false;
     // uint32 statWeight = sRandomItemMgr.GetLiveStatWeight(bot, itemProto->ItemId);
     StatsWeightCalculator calculator(bot);
-    calculator.SetItemSetBonus(false);
+    calculator.SetItemSetBonus(true);
     calculator.SetOverflowPenalty(false);
 
     // Apply PvP weights if the bot is specced for PvP

@@ -163,7 +163,7 @@ std::string const QueryItemUsageAction::QueryTokenRewardItem(ItemTemplate const*
     ItemUsage bestUsage = ITEM_USAGE_NONE;
     float bestScore = 0.0f;
     StatsWeightCalculator calc(bot);
-    calc.SetItemSetBonus(false);
+    calc.SetItemSetBonus(true);
     calc.SetOverflowPenalty(false);
 
     for (TokenRewardCandidate const& candidate : usableCandidates)
