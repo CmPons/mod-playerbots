@@ -24,8 +24,15 @@ bool HasAggroValue::Calculate()
         return true;
     }
     bool isMT = botAI->IsExplicitMainTank(bot);
+    Player* victimPlayer = victim->ToPlayer();
     if (victim &&
-        (victim->GetGUID() == bot->GetGUID() || (!isMT && victim->ToPlayer() && botAI->IsTank(victim->ToPlayer()))))
+        (victim->GetGUID() == bot->GetGUID() || (!isMT && victimPlayer && botAI->IsTank(victimPlayer))))
+    {
+        return true;
+    }
+
+    if (botAI->HasStrategy("offtank", BOT_STATE_COMBAT) && victimPlayer &&
+        (victimPlayer == botAI->GetMaster() || botAI->IsMainTank(victimPlayer)))
     {
         return true;
     }

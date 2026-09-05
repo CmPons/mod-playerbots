@@ -13,6 +13,31 @@
 #include "Playerbots.h"
 #include "Strategy.h"
 
+namespace
+{
+    bool IsOffTankProtectedTarget(PlayerbotAI* botAI, Unit* attacker)
+    {
+        if (!botAI || !attacker || !botAI->HasStrategy("offtank", BOT_STATE_COMBAT))
+            return false;
+
+        Unit* victim = attacker->GetVictim();
+        if (!victim)
+            victim = attacker->GetThreatMgr().GetCurrentVictim();
+
+        if (!victim || victim == botAI->GetBot())
+            return false;
+
+        Player* victimPlayer = victim->ToPlayer();
+        if (!victimPlayer)
+            return false;
+
+        if (victimPlayer == botAI->GetMaster())
+            return true;
+
+        return botAI->IsMainTank(victimPlayer);
+    }
+}
+
 class FindTargetForTankStrategy : public FindNonCcTargetStrategy
 {
 public:
@@ -64,6 +89,9 @@ public:
         }
 
         if (!attacker->IsAlive())
+            return;
+
+        if (IsOffTankProtectedTarget(botAI, attacker))
             return;
 
         if (!result || IsBetter(attacker, result))

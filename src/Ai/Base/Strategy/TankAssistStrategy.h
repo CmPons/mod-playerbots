@@ -21,4 +21,14 @@ public:
     void InitTriggers(std::vector<TriggerNode*>& triggers) override;
 };
 
+class OffTankStrategy : public Strategy
+{
+public:
+    OffTankStrategy(PlayerbotAI* botAI) : Strategy(botAI) {}
+
+    std::string const getName() override { return "offtank"; }
+    uint32 GetType() const override { return STRATEGY_TYPE_TANK; }
+    void InitTriggers(std::vector<TriggerNode*>& triggers) override;
+};
+
 #endif
