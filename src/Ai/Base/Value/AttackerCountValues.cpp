@@ -31,7 +31,8 @@ bool HasAggroValue::Calculate()
         return true;
     }
 
-    if (botAI->HasStrategy("offtank", BOT_STATE_COMBAT) && victimPlayer &&
+    bool isOffTank = botAI->HasStrategy("offtank", BOT_STATE_COMBAT) || PlayerbotAI::IsOffTank(bot);
+    if (isOffTank && victimPlayer &&
         (victimPlayer == botAI->GetMaster() || botAI->IsMainTank(victimPlayer)))
     {
         return true;

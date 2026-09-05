@@ -430,6 +430,7 @@ public:
     static bool IsMainTank(Player* player);
     static bool IsExplicitMainTank(Player* player);
     static bool IsBotMainTank(Player* player);
+    static bool IsOffTank(Player* player);
     static uint32 GetGroupTankNum(Player* player);
     static bool IsAssistTank(Player* player);
     static bool IsAssistTankOfIndex(Player* player, uint8 index, bool ignoreDeadPlayers = false);

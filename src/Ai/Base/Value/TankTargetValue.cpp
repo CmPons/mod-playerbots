@@ -15,9 +15,14 @@
 
 namespace
 {
+    bool IsOffTankModeActive(PlayerbotAI* botAI)
+    {
+        return botAI && (botAI->HasStrategy("offtank", BOT_STATE_COMBAT) || PlayerbotAI::IsOffTank(botAI->GetBot()));
+    }
+
     bool IsOffTankProtectedTarget(PlayerbotAI* botAI, Unit* attacker)
     {
-        if (!botAI || !attacker || !botAI->HasStrategy("offtank", BOT_STATE_COMBAT))
+        if (!botAI || !attacker || !IsOffTankModeActive(botAI))
             return false;
 
         Unit* victim = attacker->GetVictim();
@@ -140,7 +145,7 @@ Unit* TankTargetValue::Calculate()
 {
     std::string const rti = botAI->GetAiObjectContext()->GetValue<std::string>("rti")->Get();
     Unit* rtiTarget = RtiTargetValue::Calculate();
-    if (rtiTarget)
+    if (rtiTarget && !IsOffTankProtectedTarget(botAI, rtiTarget))
     {
         Unit* victim = rtiTarget->GetVictim();
 

@@ -2464,6 +2464,37 @@ bool PlayerbotAI::IsBotMainTank(Player* player)
     return false;
 }
 
+bool PlayerbotAI::IsOffTank(Player* player)
+{
+    if (!player || !IsTank(player))
+        return false;
+
+    Group* group = player->GetGroup();
+    if (!group)
+        return false;
+
+    bool hasExplicitMainTank = false;
+    for (Group::member_citerator itr = group->GetMemberSlots().begin(); itr != group->GetMemberSlots().end(); ++itr)
+    {
+        if (!(itr->flags & MEMBER_FLAG_MAINTANK))
+            continue;
+
+        hasExplicitMainTank = true;
+        if (player->GetGUID() == itr->guid)
+            return false;
+    }
+
+    if (hasExplicitMainTank)
+        return true;
+
+    // Old-school raid convention when no explicit MT is marked: the tank-spec character in group 1
+    // is the default main tank. All other tank-spec bots behave as off-tanks.
+    if (player->GetSubGroup() == 0 && IsTank(player, true))
+        return false;
+
+    return true;
+}
+
 uint32 PlayerbotAI::GetGroupTankNum(Player* player)
 {
     Group* group = player->GetGroup();
