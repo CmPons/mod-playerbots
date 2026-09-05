@@ -12,6 +12,7 @@
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 #include "Strategy.h"
+#include "ThreatManager.h"
 
 namespace
 {
@@ -26,8 +27,9 @@ namespace
             return false;
 
         Unit* victim = attacker->GetVictim();
-        if (!victim)
-            victim = attacker->GetThreatMgr().GetCurrentVictim();
+        ThreatManager& threatMgr = attacker->GetThreatMgr();
+        if (!victim && threatMgr.CanHaveThreatList())
+            victim = threatMgr.GetCurrentVictim();
 
         if (!victim || victim == botAI->GetBot())
             return false;
