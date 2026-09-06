@@ -321,6 +321,28 @@ AiPlayerbot.LootRollRecipe = 0
 # Default: 0 (disabled)
 AiPlayerbot.LootRollDisenchant = 0
 
+# Replace generated gear-token loot with one random real gear reward from that token's reward pool.
+# This preserves the original token slot count while avoiding quest/vendor token turn-in homework.
+# Applies to creature loot and gameobject chest/cache loot only.
+# Default: 0 (disabled)
+AiPlayerbot.DirectTokenLoot.Enable = 0
+
+# Direct token loot mode:
+# 0 - disabled
+# 1 - random reward from the token reward pool, no class/raid composition filtering
+# 2 - reserved for future class-usable mode
+# Default: 1
+AiPlayerbot.DirectTokenLoot.Mode = 1
+
+# Minimum quality for generated direct token rewards.
+# 2 = uncommon, 3 = rare, 4 = epic
+# Default: 3 (rare)
+AiPlayerbot.DirectTokenLoot.MinRewardQuality = 3
+
+# Log direct token loot replacements to the playerbots log category.
+# Default: 0 (disabled)
+AiPlayerbot.DirectTokenLoot.Debug = 0
+
 # A list of GameObject GUIDs that bots will not interact with.
 # List of default GUIDs:
 # QuestItems:
