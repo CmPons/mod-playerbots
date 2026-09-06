@@ -8,6 +8,7 @@
 
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
+#include "RaidThreatUtils.h"
 #include "Strategy.h"
 
 class DpsFindTargetStrategy : public FindTargetStrategy
@@ -284,6 +285,13 @@ Unit* DpsTargetValue::Calculate()
     Unit* rti = RtiTargetValue::Calculate();
     if (rti)
         return rti;
+
+    if (!PlayerbotAI::IsTank(bot))
+    {
+        Unit* mainTankTarget = ai::threat::GetMainTankTarget(botAI);
+        if (ai::threat::IsTauntImmuneRaidBoss(mainTankTarget))
+            return mainTankTarget;
+    }
 
     float dps = AI_VALUE(float, "estimated group dps");
 

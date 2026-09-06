@@ -23,6 +23,7 @@
 #include "PlayerbotAI.h"
 #include "Player.h"
 #include "Corpse.h"
+#include "RaidThreatUtils.h"
 
 bool LowManaTrigger::IsActive()
 {
@@ -217,7 +218,15 @@ bool MediumThreatTrigger::IsActive()
     if (!AI_VALUE(Unit*, "main tank"))
         return false;
 
-    return MyAttackerCountTrigger::IsActive();
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (!currentTarget)
+        return false;
+
+    uint8 const threat = AI_VALUE2(uint8, "threat", "current target");
+    if (ai::threat::IsTauntImmuneRaidBoss(currentTarget))
+        return threat >= 65;
+
+    return threat >= 80;
 }
 
 bool LowTankThreatTrigger::IsActive()

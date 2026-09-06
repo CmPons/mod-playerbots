@@ -6,9 +6,15 @@
 
 #include "ThreatStrategy.h"
 
+#include "AttackAction.h"
+#include "Config.h"
+#include "GenericActions.h"
 #include "GenericSpellActions.h"
 #include "Map.h"
 #include "Playerbots.h"
+#include "RaidThreatUtils.h"
+
+#include <algorithm>
 
 float ThreatMultiplier::GetValue(Action* action)
 {
@@ -17,11 +23,27 @@ float ThreatMultiplier::GetValue(Action* action)
         return 1.0f;
     }
 
-    if (!action || action->getThreatType() == Action::ActionThreatType::None)
+    if (!action)
+        return 1.0f;
+
+    bool const isThreateningAction = action->getThreatType() != Action::ActionThreatType::None ||
+                                     dynamic_cast<AttackAction*>(action) ||
+                                     dynamic_cast<PetAttackAction*>(action);
+    if (!isThreateningAction)
         return 1.0f;
 
     if (!AI_VALUE(bool, "group"))
         return 1.0f;
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    uint8 const tauntImmuneLimit = uint8(std::min<uint32>(100, std::max<uint32>(1, sConfigMgr->GetOption<uint32>(
+        "AiPlayerbot.RaidThreatDiscipline.HoldPercent", 70))));
+    if (sConfigMgr->GetOption<bool>("AiPlayerbot.RaidThreatDiscipline.Enable", true) &&
+        ai::threat::ShouldHoldDamageOnTauntImmuneBoss(botAI, currentTarget, tauntImmuneLimit))
+    {
+        ai::threat::StopDirectDamage(botAI, currentTarget);
+        return 0.0f;
+    }
 
     if (action->getThreatType() == Action::ActionThreatType::Aoe)
     {

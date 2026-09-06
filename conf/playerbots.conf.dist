@@ -487,6 +487,17 @@ AiPlayerbot.DropObsoleteQuests = 1
 # Auto add dungeon/raid strategies when entering the instance if implemented
 AiPlayerbot.ApplyInstanceStrategies = 1
 
+# Make non-tank bots threat-aware on taunt-immune raid bosses.
+# When enabled, DPS/healers follow the main tank target for taunt-immune bosses and stop direct damage
+# if they approach the configured percentage of main tank threat.
+# Default: 1 (enabled)
+AiPlayerbot.RaidThreatDiscipline.Enable = 1
+
+# Threat percentage of the main tank where non-tank bots stop direct damage on taunt-immune raid bosses.
+# They may resume once tank threat pulls ahead again.
+# Default: 70
+AiPlayerbot.RaidThreatDiscipline.HoldPercent = 70
+
 # Enable auto avoid aoe strategy
 # Default: 1 (enabled)
 AiPlayerbot.AutoAvoidAoe = 1
