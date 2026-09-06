@@ -205,21 +205,11 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemTemplate const* itemProto, 
     bool needToCheckUnique = result == EQUIP_ERR_CANT_CARRY_MORE_OF_THIS ||
          itemProto->HasFlag(ITEM_FLAG_UNIQUE_EQUIPPABLE);
 
-    if (needToCheckUnique)
-    {
-        // Count the total number of the item (equipped + in bags)
-        uint32 totalItemCount = bot->GetItemCount(itemProto->ItemId, true);
-
-        // Count the number of the item in bags only
-        uint32 bagItemCount = bot->GetItemCount(itemProto->ItemId, false);
-
-        // Determine if the unique item is already equipped
-        bool isEquipped = (totalItemCount > bagItemCount);
-
-        if (isEquipped)
-            return ITEM_USAGE_NONE;  // Item is already equipped
-        // If not equipped, continue processing
-    }
+    // GetItemCount's boolean includes the bank, not equipped gear: both variants
+    // count equipment. Inspect equipped items directly so a spare unique ring
+    // cannot be selected as an upgrade for the other finger slot.
+    if (needToCheckUnique && bot->HasItemOrGemWithIdEquipped(itemProto->ItemId, 1))
+        return ITEM_USAGE_NONE;
 
     if (itemProto->Class == ITEM_CLASS_QUIVER && bot->getClass() != CLASS_HUNTER)
         return ITEM_USAGE_NONE;

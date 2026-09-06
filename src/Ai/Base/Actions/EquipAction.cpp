@@ -65,6 +65,9 @@ void EquipAction::EquipItem(FindItemVisitor* visitor)
 
 void EquipAction::EquipItem(Item* item)
 {
+    if (!item || item->IsEquipped())
+        return;
+
     uint8 bagIndex = item->GetBagSlot();
     uint8 slot = item->GetSlot();
     const ItemTemplate* itemProto = item->GetTemplate();
@@ -92,7 +95,12 @@ void EquipAction::EquipItem(Item* item)
         {
             uint16 src = ((bagIndex << 8) | slot);
             uint16 dst = ((INVENTORY_SLOT_BAG_0 << 8) | newBagSlot);
+            if (src == dst)
+                return;
+
             bot->SwapItem(src, dst);
+            if (bot->GetItemByPos(dst) != item)
+                return;
             equippedBag = true;
         }
     }
@@ -112,6 +120,9 @@ void EquipAction::EquipItem(Item* item)
             nicePacket.Read();
             bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
 
+            if (bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED) != item)
+                return;
+
             std::ostringstream out;
             out << "Equipping " << chat->FormatItem(itemProto) << " in ranged slot";
             botAI->TellMaster(out);
@@ -119,6 +130,8 @@ void EquipAction::EquipItem(Item* item)
         }
 
         uint8 dstSlot = botAI->FindEquipSlot(itemProto, NULL_SLOT, true);
+        if (dstSlot == NULL_SLOT)
+            return;
 
         // Check if the item is a weapon and whether the bot can dual wield or use Titan Grip
         bool isWeapon = (itemProto->Class == ITEM_CLASS_WEAPON);
@@ -212,6 +225,11 @@ void EquipAction::EquipItem(Item* item)
                     bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
                 }
 
+                // The handler can reject an equip (combat, uniqueness, bag space,
+                // etc.). Do not announce it or move the old weapon on failure.
+                if (bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND) != item)
+                    return;
+
                 // Try moving old main hand weapon to offhand if beneficial
                 if (mainHandItem && mainHandCanGoOff && (!offHandItem || mainHandScore > offHandScore))
                 {
@@ -224,9 +242,12 @@ void EquipAction::EquipItem(Item* item)
                     nicePacket.Read();
                     bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
 
-                    std::ostringstream moveMsg;
-                    moveMsg << "Main hand upgrade found. Moving " << chat->FormatItem(oldMHProto) << " to offhand";
-                    botAI->TellMaster(moveMsg);
+                    if (bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND) == mainHandItem)
+                    {
+                        std::ostringstream moveMsg;
+                        moveMsg << "Main hand upgrade found. Moving " << chat->FormatItem(oldMHProto) << " to offhand";
+                        botAI->TellMaster(moveMsg);
+                    }
                 }
 
                 std::ostringstream out;
@@ -245,6 +266,9 @@ void EquipAction::EquipItem(Item* item)
                 WorldPackets::Item::AutoEquipItemSlot nicePacket(std::move(eqPacket));
                 nicePacket.Read();
                 bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
+
+                if (bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND) != item)
+                    return;
 
                 std::ostringstream out;
                 out << "Equipping " << chat->FormatItem(itemProto) << " in offhand";
@@ -324,6 +348,9 @@ void EquipAction::EquipItem(Item* item)
             nicePacket.Read();
             bot->GetSession()->HandleAutoEquipItemSlotOpcode(nicePacket);
         }
+
+        if (bot->GetItemByPos(INVENTORY_SLOT_BAG_0, dstSlot) != item)
+            return;
     }
 
     std::ostringstream out;
