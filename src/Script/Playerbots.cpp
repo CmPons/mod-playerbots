@@ -513,6 +513,7 @@ public:
 
 void AddPlayerbotsSecureLoginScripts();
 void AddPlayerbotsDirectTokenLootScripts();
+void AddPlayerbotsHunterPetTauntScripts();
 
 void AddSC_MagtheridonBotScripts();
 void AddSC_TempestKeepBotScripts();
@@ -532,6 +533,7 @@ void AddPlayerbotsScripts()
     new PlayerBotsBGScript();
     AddPlayerbotsSecureLoginScripts();
     AddPlayerbotsDirectTokenLootScripts();
+    AddPlayerbotsHunterPetTauntScripts();
     AddPlayerbotsCommandscripts();
     PlayerBotsGuildValidationScript();
     AddSC_MagtheridonBotScripts();
