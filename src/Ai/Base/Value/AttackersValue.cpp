@@ -13,6 +13,19 @@
 #include "ReputationMgr.h"
 #include "ServerFacade.h"
 
+GuidVector AttackersValue::Get()
+{
+    // Keep the normal one-second cache, but never carry a skull-only attacker
+    // across a real combat transition (the AI engine can lag behind that flag).
+    bool const inCombat = bot->IsInCombat();
+    if (inCombat != wasInCombat)
+    {
+        Reset();
+        wasInCombat = inCombat;
+    }
+    return ObjectGuidListCalculatedValue::Get();
+}
+
 GuidVector AttackersValue::Calculate()
 {
     std::unordered_set<Unit*> targets;
@@ -36,7 +49,9 @@ GuidVector AttackersValue::Calculate()
         if (unit && IsValidTarget(unit, bot))
             targets.insert(unit);
     }
-    if (Group* group = bot->GetGroup())
+    // Skull is a combat focus marker, not an instruction to start a pull.
+    // Real group attackers and explicitly prioritized targets remain eligible above.
+    if (Group* group = bot->GetGroup(); group && bot->IsInCombat())
     {
         ObjectGuid skullGuid = group->GetTargetIcon(7);
         Unit* skullTarget = botAI->GetUnit(skullGuid);

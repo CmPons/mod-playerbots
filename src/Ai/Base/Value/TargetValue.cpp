@@ -124,7 +124,8 @@ void FindTargetStrategy::GetPlayerCount(Unit* creature, uint32* tankCount, uint3
 
 bool FindTargetStrategy::IsHighPriority(Unit* attacker)
 {
-    if (Group* group = botAI->GetBot()->GetGroup())
+    // Before combat, skull gives no preference over genuine group attackers.
+    if (Group* group = botAI->GetBot()->GetGroup(); group && botAI->GetBot()->IsInCombat())
     {
         ObjectGuid guid = group->GetTargetIcon(7);
         if (guid && attacker->GetGUID() == guid)

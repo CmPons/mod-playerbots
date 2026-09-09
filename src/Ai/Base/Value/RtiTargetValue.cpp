@@ -45,6 +45,11 @@ Unit* RtiTargetValue::Calculate()
     if (index == -1)
         return nullptr;
 
+    // DPS/tank focus must not turn a pre-pull skull into an attack order.
+    // Leave CC assignments and other icons unchanged.
+    if (type == "rti" && index == skullIndex && !bot->IsInCombat())
+        return nullptr;
+
     ObjectGuid guid = group->GetTargetIcon(index);
     if (!guid)
         return nullptr;

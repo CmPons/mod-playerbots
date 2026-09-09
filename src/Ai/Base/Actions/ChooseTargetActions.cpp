@@ -148,6 +148,11 @@ bool DpsAssistAction::isUseful()
 
 bool AttackRtiTargetAction::Execute(Event /*event*/)
 {
+    // Recheck at execution: direct icon fallback must not bypass the focus gate.
+    // An intentional pre-combat pull still uses PullRtiTargetAction or attack my target.
+    if (!bot->IsInCombat() && AI_VALUE(std::string, "rti") == "skull")
+        return false;
+
     Unit* rtiTarget = AI_VALUE(Unit*, "rti target");
 
     // Fallback: if the "rti target" value did not resolve a valid unit yet,
@@ -185,6 +190,9 @@ bool AttackRtiTargetAction::Execute(Event /*event*/)
 
 bool AttackRtiTargetAction::isUseful()
 {
+    if (!bot->IsInCombat() && AI_VALUE(std::string, "rti") == "skull")
+        return false;
+
     if (botAI->ContainsStrategy(STRATEGY_TYPE_HEAL))
         return false;
 
