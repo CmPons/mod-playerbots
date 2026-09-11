@@ -6,6 +6,7 @@
 #include "RaidThreatUtils.h"
 
 #include "AiObjectContext.h"
+#include "Aq40Helpers.h"
 #include "Creature.h"
 #include "CreatureData.h"
 #include "Group.h"
@@ -98,12 +99,18 @@ bool ShouldHoldDamageOnTauntImmuneBoss(PlayerbotAI* botAI, Unit* target, uint8 t
     if (!bot || !bot->GetGroup() || !bot->GetGroup()->isRaidGroup())
         return false;
 
-    if (PlayerbotAI::IsTank(bot))
+    bool const twins = TempleOfAhnQirajHelpers::IsTwinsBossTarget(bot, target);
+    if (!twins && PlayerbotAI::IsTank(bot))
         return false;
 
-    Unit* mainTank = GetMainTank(botAI);
-    if (!mainTank || mainTank == bot || !mainTank->IsAlive())
+    Unit* mainTank = twins ? TempleOfAhnQirajHelpers::GetTwinsTank(bot,
+        target == TempleOfAhnQirajHelpers::GetTwin(bot, TempleOfAhnQirajHelpers::AQT_DATA_VEKLOR)
+            ? TempleOfAhnQirajHelpers::AQT_DATA_VEKLOR : TempleOfAhnQirajHelpers::AQT_DATA_VEKNILASH)
+        : GetMainTank(botAI);
+    if (mainTank == bot)
         return false;
+    if (!mainTank || !mainTank->IsAlive())
+        return twins;  // no assigned owner: do not deliberately feed this emperor more DPS threat
 
     Unit* victim = GetThreatVictim(target);
     if (victim == bot)
@@ -121,7 +128,7 @@ bool ShouldHoldDamageOnTauntImmuneBoss(PlayerbotAI* botAI, Unit* target, uint8 t
         return true;
 
     if (tankThreat <= 0.0f)
-        return false;
+        return twins;
 
     return botThreat * 100.0f >= tankThreat * float(threatPercentLimit);
 }

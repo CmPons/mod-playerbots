@@ -7,6 +7,7 @@
 #include "ThreatStrategy.h"
 
 #include "AttackAction.h"
+#include "Aq40Helpers.h"
 #include "Config.h"
 #include "GenericActions.h"
 #include "GenericSpellActions.h"
@@ -26,6 +27,18 @@ float ThreatMultiplier::GetValue(Action* action)
     if (!action)
         return 1.0f;
 
+    if (TempleOfAhnQirajHelpers::IsTwinsEncounterActive(bot))
+    {
+        // Healing actions report AoE threat too. A DPS hold must never silence tank healing,
+        // dispels or defensive buffs during the pull/teleport handoff.
+        if (dynamic_cast<CastHealingSpellAction*>(action))
+            return 1.0f;
+        if (auto* spell = dynamic_cast<CastSpellAction*>(action))
+            if (Unit* recipient = spell->GetTarget())
+                if (!bot->IsValidAttackTarget(recipient))
+                    return 1.0f;
+    }
+
     bool const isThreateningAction = action->getThreatType() != Action::ActionThreatType::None ||
                                      dynamic_cast<AttackAction*>(action) ||
                                      dynamic_cast<PetAttackAction*>(action);
@@ -38,12 +51,18 @@ float ThreatMultiplier::GetValue(Action* action)
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     uint8 const tauntImmuneLimit = uint8(std::min<uint32>(100, std::max<uint32>(1, sConfigMgr->GetOption<uint32>(
         "AiPlayerbot.RaidThreatDiscipline.HoldPercent", 70))));
-    if (sConfigMgr->GetOption<bool>("AiPlayerbot.RaidThreatDiscipline.Enable", true) &&
+    bool const twins = TempleOfAhnQirajHelpers::IsTwinsBossTarget(bot, currentTarget);
+    if ((twins || sConfigMgr->GetOption<bool>("AiPlayerbot.RaidThreatDiscipline.Enable", true)) &&
         ai::threat::ShouldHoldDamageOnTauntImmuneBoss(botAI, currentTarget, tauntImmuneLimit))
     {
         ai::threat::StopDirectDamage(botAI, currentTarget);
         return 0.0f;
     }
+
+    // The encounter already checked threat against THIS emperor's owner. The generic 80%/AoE
+    // checks compare with physical tanks and would immediately silence the caster tank again.
+    if (twins)
+        return 1.0f;
 
     if (action->getThreatType() == Action::ActionThreatType::Aoe)
     {

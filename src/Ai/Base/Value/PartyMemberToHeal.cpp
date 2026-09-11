@@ -6,6 +6,9 @@
 
 #include "PartyMemberToHeal.h"
 
+#include <algorithm>
+
+#include "Aq40Helpers.h"
 #include "Playerbots.h"
 #include "ServerFacade.h"
 
@@ -69,10 +72,12 @@ Unit* PartyMemberToHeal::Calculate()
         return (Unit*)calc.param;
     }
 
+    // Resolve once, not once per candidate. Explicit focus-heal commands above retain priority.
+    Player* twinsTank = TempleOfAhnQirajHelpers::GetTwinsHealerTank(bot, botAI);
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
         Player* player = gref->GetSource();
-        if (player->IsGameMaster())
+        if (!player || player->IsGameMaster())
             continue;
         if (player && player->IsAlive())
         {
@@ -88,6 +93,11 @@ Unit* PartyMemberToHeal::Calculate()
                 {
                     probeValue = health + player->GetDistance2d(bot) / 10.0f;
                 }
+                if (twinsTank && health < 90.0f && player == twinsTank)
+                    probeValue -= 20.0f;
+                // An assignment is a preference, not permission to ignore a nearby dying player.
+                if (twinsTank && health < 30.0f)
+                    probeValue -= 40.0f;
                 // delay Check player to here for better performance
                 if (probeValue < calc.minValue && Check(player))
                 {
@@ -129,9 +139,15 @@ Unit* PartyMemberToHeal::Calculate()
 
 bool PartyMemberToHeal::Check(Unit* player)
 {
-    // return player && player != bot && player->GetMapId() == bot->GetMapId() && player->IsInWorld() &&
-    //     ServerFacade::instance().GetDistance2d(bot, player) < (player->IsPlayer() && botAI->IsTank((Player*)player) ? 50.0f
-    //     : 40.0f);
+    // Don't select a remote human and then walk out of tank coverage to heal them. Encounter
+    // movement separately restores range/LOS to our assigned tank. Other raids keep the old rule.
+    if (TempleOfAhnQirajHelpers::IsTwinsEncounterActive(bot) && PlayerbotAI::IsHeal(bot))
+    {
+        float const range = std::min(botAI->GetRange("heal"), sPlayerbotAIConfig.healDistance);
+        if (!player || !player->IsInWorld() || player->GetMap() != bot->GetMap() ||
+            !player->InSamePhase(bot) || bot->GetDistance2d(player) > range)
+            return false;
+    }
     return player->GetMapId() == bot->GetMapId() && !player->IsCharmed() &&
            bot->GetDistance2d(player) < sPlayerbotAIConfig.healDistance * 2 && bot->IsWithinLOSInMap(player);
 }

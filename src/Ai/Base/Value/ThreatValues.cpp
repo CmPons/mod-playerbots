@@ -6,6 +6,9 @@
 
 #include "ThreatValues.h"
 
+#include <algorithm>
+
+#include "Aq40Helpers.h"
 #include "Playerbots.h"
 #include "ThreatManager.h"
 
@@ -44,6 +47,20 @@ uint8 ThreatValue::Calculate(Unit* target)
     Group* group = bot->GetGroup();
     if (!group)
         return 0;
+
+    // Panic/flee and other consumers must recognize the same encounter owner as the multiplier.
+    if (TempleOfAhnQirajHelpers::IsTwinsBossTarget(bot, target))
+    {
+        Player* tank = TempleOfAhnQirajHelpers::GetTwinsTank(bot,
+            target == TempleOfAhnQirajHelpers::GetTwin(bot, TempleOfAhnQirajHelpers::AQT_DATA_VEKLOR)
+                ? TempleOfAhnQirajHelpers::AQT_DATA_VEKLOR : TempleOfAhnQirajHelpers::AQT_DATA_VEKNILASH);
+        if (tank == bot)
+            return 0;
+        float const tankThreat = tank ? target->GetThreatMgr().GetThreat(tank) : 0.0f;
+        if (tankThreat <= 0.0f)
+            return 100;
+        return uint8(std::clamp(target->GetThreatMgr().GetThreat(bot) * 100.0f / tankThreat, 0.0f, 255.0f));
+    }
 
     float botThreat = target->GetThreatMgr().GetThreat(bot);
     float maxThreat = -1.0f;
