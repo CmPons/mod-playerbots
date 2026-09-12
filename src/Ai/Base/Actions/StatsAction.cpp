@@ -100,15 +100,21 @@ void StatsAction::ListRepairCost(std::ostringstream& out)
     {
         uint16 pos = ((INVENTORY_SLOT_BAG_0 << 8) | i);
         totalCost += EstRepair(pos);
-        double repair = RepairPercent(pos);
-        if (repair < 100)
+        // The percentage describes equipped, repairable gear, including fully repaired pieces.
+        // Keep the existing repair-cost estimate for equipment and backpack items above.
+        if (i < EQUIPMENT_SLOT_END)
         {
-            repairPercent += repair;
-            ++repairCount;
+            Item* item = bot->GetItemByPos(pos);
+            if (item && item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY))
+            {
+                repairPercent += RepairPercent(pos);
+                ++repairCount;
+            }
         }
     }
 
-    repairPercent /= repairCount;
+    // Nothing repairable equipped is not broken gear (and must not divide by zero).
+    repairPercent = repairCount > 0 ? repairPercent / repairCount : 100.0;
 
     std::string color = "ff00ff00";
     if (repairPercent < 50)
