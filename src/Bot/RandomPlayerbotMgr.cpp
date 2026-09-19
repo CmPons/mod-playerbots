@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <boost/thread/thread.hpp>
 #include <cstdlib>
+#include <charconv>
 #include <ctime>
 #include <iomanip>
 #include <random>
@@ -19,6 +20,7 @@
 #include "Battleground.h"
 #include "BattlegroundMgr.h"
 #include "ChannelMgr.h"
+#include "Config.h"
 #include "DBCStores.h"
 #include "DBCStructure.h"
 #include "DatabaseEnv.h"
@@ -187,7 +189,10 @@ double botPIDImpl::calculate(double setpoint, double pv)
 
 botPIDImpl::~botPIDImpl() {}
 
-uint32 RandomPlayerbotMgr::GetMaxAllowedBotCount() { return GetEventValue(0, "bot_count"); }
+uint32 RandomPlayerbotMgr::GetMaxAllowedBotCount()
+{
+    return GetEventValue(0, "bot_count") + worldBotGuids.size();
+}
 
 void RandomPlayerbotMgr::LogPlayerLocation()
 {
@@ -325,6 +330,8 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 /*elapsed*/, bool /*minimal*/)
                             sPlayerbotAIConfig.randomBotCountChangeMaxInterval));
     }
 
+    // Selected characters have additive slots, not replacements for ordinary world bots.
+    maxAllowedBotCount += worldBotGuids.size();
     GetBots();
     std::list<uint32> availableBots = currentBots;
     uint32 availableBotCount = availableBots.size();
@@ -376,16 +383,20 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 /*elapsed*/, bool /*minimal*/)
             }
         }
 
-        if (availableBotCount < maxAllowedBotCount &&
-            (sPlayerbotAIConfig.disabledWithoutRealPlayer == false ||
-             (realPlayerIsLogged && DelayLoginBotsTimer != 0 && time(nullptr) >= DelayLoginBotsTimer)))
+        if (realPlayerIsLogged && DelayLoginBotsTimer != 0 && time(nullptr) >= DelayLoginBotsTimer)
         {
-            AddRandomBots();
+            for (uint32 bot : worldBotGuids)
+                AddWorldBot(bot);
+            if (availableBotCount < maxAllowedBotCount)
+                AddRandomBots();
         }
     }
-    else if (availableBotCount < maxAllowedBotCount)
+    else
     {
-        AddRandomBots();
+        for (uint32 bot : worldBotGuids)
+            AddWorldBot(bot);
+        if (availableBotCount < maxAllowedBotCount)
+            AddRandomBots();
     }
 
     if (sPlayerbotAIConfig.syncLevelWithPlayers && !players.empty())
@@ -641,6 +652,75 @@ void RandomPlayerbotMgr::AssignAccountTypes()
              currentAssignments.size() - rndBotTypeAccounts.size() - addClassTypeAccounts.size());
 }
 
+void RandomPlayerbotMgr::LoadWorldBotGuids()
+{
+    // No hot ownership handoff: changing this option requires a server restart.
+    if (worldBotGuidsLoaded)
+        return;
+    worldBotGuidsLoaded = true;
+    if (!sPlayerbotAIConfig.enabled || !sPlayerbotAIConfig.randomBotAutologin)
+        return;
+
+    std::istringstream input(sConfigMgr->GetOption<std::string>("AiPlayerbot.WorldBotGuids", ""));
+    std::string token;
+    while (std::getline(input, token, ','))
+    {
+        auto first = token.find_first_not_of(" \t\r\n");
+        if (first == std::string::npos)
+            continue;
+        auto last = token.find_last_not_of(" \t\r\n");
+        uint32 bot = 0;
+        char const* begin = token.data() + first;
+        char const* end = token.data() + last + 1;
+        auto result = std::from_chars(begin, end, bot);
+        if (result.ec != std::errc() || result.ptr != end || !bot)
+        {
+            LOG_ERROR("playerbots", "Invalid AiPlayerbot.WorldBotGuids entry: {}", token);
+            continue;
+        }
+        ObjectGuid guid = ObjectGuid::Create<HighGuid::Player>(bot);
+        uint32 account = sCharacterCache->GetCharacterAccountIdByGuid(guid);
+        if (!account || !sPlayerbotAIConfig.IsInRandomAccountList(account) ||
+            std::find(addClassTypeAccounts.begin(), addClassTypeAccounts.end(), account) == addClassTypeAccounts.end())
+        {
+            LOG_ERROR("playerbots", "WorldBotGuids: {} is not an existing type-2 random-account character", bot);
+            continue;
+        }
+        worldBotGuids.insert(bot);
+    }
+}
+
+bool RandomPlayerbotMgr::IsWorldBot(ObjectGuid::LowType bot) const
+{
+    return worldBotGuids.find(bot) != worldBotGuids.end();
+}
+
+bool RandomPlayerbotMgr::AddWorldBot(ObjectGuid::LowType bot)
+{
+    if (!IsWorldBot(bot))
+        return false;
+
+    ObjectGuid guid = ObjectGuid::Create<HighGuid::Player>(bot);
+    // Do not steal a personal holder's bot, or race an in-flight login.
+    if (botLoading.find(guid) != botLoading.end() ||
+        (ObjectAccessor::FindConnectedPlayer(guid) && !GetPlayerBot(guid)))
+        return false;
+    if (std::find(currentBots.begin(), currentBots.end(), bot) != currentBots.end())
+        return true;
+    CharacterCacheEntry const* character = sCharacterCache->GetCharacterCacheByGuid(guid);
+    if (!character || GetEventValue(bot, "logout") ||
+        (sPlayerbotAIConfig.disableDeathKnightLogin && character->Class == CLASS_DEATH_KNIGHT))
+        return false;
+
+    uint32 lifetime = sPlayerbotAIConfig.enablePeriodicOnlineOffline
+        ? urand(sPlayerbotAIConfig.minRandomBotInWorldTime, sPlayerbotAIConfig.maxRandomBotInWorldTime)
+        : sPlayerbotAIConfig.permanentlyInWorldTime;
+    SetEventValue(bot, "add", 1, lifetime);
+    SetEventValue(bot, "logout", 0, 0);
+    currentBots.push_back(bot);
+    return true;
+}
+
 bool RandomPlayerbotMgr::IsAccountType(uint32 accountId, uint8 accountType)
 {
     QueryResult result = PlayerbotsDatabase.Query("SELECT 1 FROM playerbots_account_type WHERE account_id = {} AND account_type = {}", accountId, accountType);
@@ -744,10 +824,12 @@ uint32 RandomPlayerbotMgr::AddRandomBots()
     uint32 maxAllowedBotCount = GetEventValue(0, "bot_count");
     static time_t missingBotsTimer = 0;
 
-    if (currentBots.size() < maxAllowedBotCount)
+    uint32 ordinaryBotCount = std::count_if(currentBots.begin(), currentBots.end(),
+        [this](uint32 bot) { return !IsWorldBot(bot); });
+    if (ordinaryBotCount < maxAllowedBotCount)
     {
-        // Calculate how many bots to add
-        maxAllowedBotCount -= currentBots.size();
+        // Selected characters do not consume the ordinary population budget.
+        maxAllowedBotCount -= ordinaryBotCount;
         maxAllowedBotCount = std::min(sPlayerbotAIConfig.randomBotsPerInterval, maxAllowedBotCount);
 
         // Single RNG instance for all shuffling
@@ -1623,8 +1705,9 @@ bool RandomPlayerbotMgr::ProcessBot(Player* bot)
         uint32 randomize = GetEventValue(botId, "randomize");
         if (!randomize)
         {
-            if (persistentCompanion)
+            if (persistentCompanion || IsWorldBot(botId))
             {
+                // Opted-in existing characters earn levels; do not factory-reset them.
                 ScheduleRandomize(botId, sPlayerbotAIConfig.maxRandomBotRandomizeTime);
                 return false;
             }
@@ -1884,6 +1967,8 @@ void RandomPlayerbotMgr::PrepareAddclassCache()
 
 void RandomPlayerbotMgr::Init()
 {
+    LoadWorldBotGuids();
+
     if (sPlayerbotAIConfig.addClassCommand)
         sRandomPlayerbotMgr.PrepareAddclassCache();
 

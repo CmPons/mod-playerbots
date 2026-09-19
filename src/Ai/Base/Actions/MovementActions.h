@@ -29,6 +29,9 @@ public:
     MovementAction(PlayerbotAI* botAI, std::string const name);
 
 protected:
+    // Cthun only: execute already checked linear points, never regenerate a route.
+    bool MoveCheckedCthunPath(Movement::PointsArray const& path, uint64 owner);
+    void RecordCthunFollow();
     bool JumpTo(uint32 mapId, float x, float y, float z, MovementPriority priority = MovementPriority::MOVEMENT_NORMAL);
     bool MoveNear(uint32 mapId, float x, float y, float z, float distance = sPlayerbotAIConfig.contactDistance,
                   MovementPriority priority = MovementPriority::MOVEMENT_NORMAL);

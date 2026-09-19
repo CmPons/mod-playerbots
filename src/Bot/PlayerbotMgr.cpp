@@ -145,6 +145,15 @@ void PlayerbotHolder::AddPlayerBot(ObjectGuid playerGuid, uint32 masterAccountId
         }
         return;
     }
+    // Authorize the original caller above before choosing the world-bot lifetime/holder.
+    // An ordinary group invite, not login itself, gives these bots a player master.
+    if (sRandomPlayerbotMgr.IsWorldBot(playerGuid.GetCounter()))
+    {
+        if (!sRandomPlayerbotMgr.AddWorldBot(playerGuid.GetCounter()))
+            return;
+        masterAccountId = 0;
+    }
+
     std::shared_ptr<PlayerbotLoginQueryHolder> holder =
         std::make_shared<PlayerbotLoginQueryHolder>(masterAccountId, accountId, playerGuid);
     if (!holder->Initialize())
@@ -599,7 +608,8 @@ void PlayerbotHolder::OnBotLogin(Player* const bot)
 
     bot->SaveToDB(false, false);
     bool addClassBot = sRandomPlayerbotMgr.IsAccountType(accountId, 2);
-    if (addClassBot && master && abs((int)master->GetLevel() - (int)bot->GetLevel()) > 3)
+    if (addClassBot && !sRandomPlayerbotMgr.IsWorldBot(bot->GetGUID().GetCounter()) && master &&
+        abs((int)master->GetLevel() - (int)bot->GetLevel()) > 3)
     {
         // PlayerbotFactory factory(bot, master->GetLevel());
         // factory.Randomize(false);

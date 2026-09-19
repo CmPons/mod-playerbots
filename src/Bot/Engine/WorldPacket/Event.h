@@ -15,7 +15,8 @@ class Player;
 class Event
 {
 public:
-    Event(Event const& other) : source(other.source), param(other.param), packet(other.packet), owner(other.owner) {}
+    Event(Event const& other) : source(other.source), param(other.param), packet(other.packet), owner(other.owner),
+        scheduled(other.scheduled) {}
     Event() {}
     Event(std::string const source) : source(source) {}
     Event(std::string const source, std::string const param, Player* owner = nullptr)
@@ -34,6 +35,8 @@ public:
     WorldPacket& getPacket() { return packet; }
     ObjectGuid getObject();
     Player* getOwner() { return owner; }
+    bool IsScheduled() const { return scheduled; }
+    void SetScheduled(bool value) { scheduled = value; }
     bool operator!() const { return source.empty(); }
 
 protected:
@@ -41,6 +44,7 @@ protected:
     std::string param;
     WorldPacket packet;
     Player* owner = nullptr;
+    bool scheduled = false;
 };
 
 #endif

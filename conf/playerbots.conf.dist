@@ -84,6 +84,16 @@ AiPlayerbot.Enabled = 1
 # Enable randombot system
 AiPlayerbot.RandomBotAutologin = 1
 
+# Existing type-2/addclass character GUIDs to run through the ordinary world-bot scheduler.
+# Comma-separated low GUIDs, not accounts. Empty disables this opt-in. Startup-only; no hot handoff.
+# Requires Enabled and RandomBotAutologin. Adds one population slot per valid unique character.
+# Keeps account/roster ownership; online bots are recruited with normal group invitations.
+# Login requests use the world holder (no automatic invite). Automatic factory randomization is
+# skipped, but ordinary equipment/learning/refresh maintenance and friend protection are unchanged.
+# IMPORTANT: if mod-player-bot-level-brackets is enabled, also exclude these names in its
+# BotLevelBrackets.ExcludeNames option before activation, or it can still reroll/reset them.
+AiPlayerbot.WorldBotGuids = ""
+
 # Randombot count
 AiPlayerbot.MinRandomBots = 500
 AiPlayerbot.MaxRandomBots = 500

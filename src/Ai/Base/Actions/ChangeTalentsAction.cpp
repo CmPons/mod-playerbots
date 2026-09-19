@@ -87,8 +87,7 @@ bool ChangeTalentsAction::Execute(Event event)
         uint32 tab = AiFactory::GetPlayerSpecTab(bot);
         out << "My current talent spec is: "
             << "|h|cffffffff";
-        out << chat->FormatClass(bot, tab) << "\n";
-        out << TalentsHelp();
+        out << chat->FormatClass(bot, tab);
     }
 
     botAI->TellMaster(out);

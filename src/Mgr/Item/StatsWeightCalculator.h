@@ -35,6 +35,8 @@ public:
 
     void SetOverflowPenalty(bool apply) { enable_overflow_penalty_ = apply; }
     void SetItemSetBonus(bool apply) { enable_item_set_bonus_ = apply; }
+    // Score both alternatives as additions to the same set state with this slot removed.
+    void SetItemSetComparisonSlot(uint8 slot) { itemSetComparisonSlot_ = slot; }
     void SetQualityBlend(bool apply) { enable_quality_blend_ = apply; }
     void SetPvpSpec(bool isPvp) { pvpSpec_ = isPvp; }
     void SetExcludeResilience(bool exclude) { exclude_resilience_ = exclude; }
@@ -67,6 +69,7 @@ private:
     bool enable_overflow_penalty_;
     bool enable_item_set_bonus_;
     bool enable_quality_blend_;
+    uint8 itemSetComparisonSlot_ = NULL_SLOT;
 
     float weight_;
     float stats_weights_[STATS_TYPE_MAX];

@@ -172,6 +172,7 @@ bool Engine::DoNextAction(Unit* /*unit*/, uint32 /*depth*/, bool minimal)
             continue;
 
         Event event = basket->getEvent();
+        RaidCombat::ScheduleGuard scheduled(botAI->raidCombat.scheduled, event.IsScheduled());
         ActionNode* actionNode = queue.Pop();  // NOTE: Pop() deletes basket
         Action* action = InitializeAction(actionNode);
 
@@ -307,6 +308,8 @@ bool Engine::MultiplyAndPush(
 
 ActionResult Engine::ExecuteAction(std::string const name, Event event, std::string const qualifier)
 {
+    RaidCombat::ScheduleGuard scheduled(botAI->raidCombat.scheduled, false);
+    event.SetScheduled(false);
     bool result = false;
 
     ActionNode* actionNode = CreateActionNode(name);
@@ -503,6 +506,7 @@ void Engine::PushDefaultActions()
     {
         Strategy* strategy = i->second;
         Event emptyEvent;
+        emptyEvent.SetScheduled(true);
         MultiplyAndPush(strategy->getDefaultActions(), 0.0f, false, emptyEvent, "default");
     }
 }
@@ -576,9 +580,17 @@ bool Engine::ListenAndExecute(Action* action, Event event)
         return actionExecuted;
     }
 
+    bool const origin = botAI->raidCombat.scheduled;
+    RaidCombat::ScheduleGuard listeners(botAI->raidCombat.scheduled, false);
     if (actionExecutionListeners.Before(action, event))
     {
-        actionExecuted = actionExecutionListeners.AllowExecution(action, event) ? action->Execute(event) : true;
+        if (actionExecutionListeners.AllowExecution(action, event))
+        {
+            RaidCombat::ScheduleGuard scheduled(botAI->raidCombat.scheduled, origin);
+            actionExecuted = action->Execute(event);
+        }
+        else
+            actionExecuted = true;
     }
 
     if (botAI->HasStrategy("debug", BOT_STATE_NON_COMBAT))

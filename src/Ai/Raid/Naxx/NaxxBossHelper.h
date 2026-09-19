@@ -537,4 +537,154 @@ protected:
     Unit* stalagg = nullptr;
 };
 
+namespace HeiganDance
+{
+    // --- Geometry: mirrors GetEruptionSection in instance_naxxramas.cpp ---
+    // Pivot is the SE-corner reference point HeiganPos = {2796, -3707}.
+    constexpr float PIVOT_X = 2796.0f;
+    constexpr float PIVOT_Y = -3707.0f;
+    // Dividing-ray slopes: (refY - PIVOT_Y) / (refX - PIVOT_X).
+    constexpr float SLOPE[3] =
+    {
+        (-3685.0f - PIVOT_Y) / (2724.0f - PIVOT_X),
+        (-3647.0f - PIVOT_Y) / (2749.0f - PIVOT_X),
+        (-3637.0f - PIVOT_Y) / (2771.0f - PIVOT_X),
+    };
+
+    // --- Safe-band waypoints, one per section index 0..3: {x, y, z}. ---
+    // Tight dance arc: all four points sit ~30yd from the pivot at each
+    // wedge's center angle, so every step in the 3->2->1->0->1->2->3 order is
+    // a short (~14yd / ~2s) hop that fits inside the 4s fast-dance window.
+    // The original band-centroid waypoints put steps at 26-37yd (4-5.3s),
+    // impossible to cross in 4s — squishies got clipped while tanks tanked it.
+    // Each MUST satisfy GetEruptionSection(x, y) == its own index; CALIBRATE
+    // Z / exact spots in-game (see plan Task 11).
+    constexpr float WAYPOINT[4][3] =
+    {
+        {2766.4f, -3702.0f, 276.5f},  // 0
+        {2771.3f, -3690.0f, 276.5f},  // 1
+        {2781.5f, -3680.7f, 276.5f},  // 2
+        {2789.6f, -3677.7f, 276.5f},  // 3
+    };
+
+    // --- Cadence: mirrors boss_heigan.cpp schedulers (milliseconds) ---
+    constexpr uint32 SLOW_FIRST_MS = 15000;
+    constexpr uint32 SLOW_PERIOD_MS = 10000;
+    constexpr uint32 FAST_FIRST_MS = 7000;
+    constexpr uint32 FAST_PERIOD_MS = 4000;
+
+    // Ping-pong safe-section order: 3,2,1,0,1,2 repeating.
+    constexpr uint32 SEQ[6] = {3, 2, 1, 0, 1, 2};
+
+    // Flip to true for a calibration build (logs live pos + section).
+    constexpr bool DEBUG = true;
+
+    inline uint32 GetEruptionSection(float x, float y)
+    {
+        float yr = y - PIVOT_Y;
+        if (yr < 1.0f)
+            return 0;
+
+        float xr = x - PIVOT_X;
+        if (xr > -1.0f)
+            return 3;
+
+        float slope = yr / xr;
+        for (uint32 i = 0; i < 3; ++i)
+            if (slope > SLOPE[i])
+                return i;
+
+        return 3;
+    }
+}  // namespace HeiganDance
+
+class HeiganBossHelper : public AiObject
+{
+public:
+    HeiganBossHelper(PlayerbotAI* botAI) : AiObject(botAI) {}
+
+    // Resolve Heigan, drop state out of combat, and re-anchor the cadence
+    // clock on every slow<->fast phase change. Returns false when there is
+    // no live Heigan to dance for (also the action's guard-and-bail).
+    bool UpdateBossAI()
+    {
+        if (!bot->IsInCombat())
+        {
+            Reset();
+            return false;
+        }
+        if (_unit && (!_unit->IsInWorld() || !_unit->IsAlive()))
+            Reset();
+
+        if (!_unit)
+            _unit = AI_VALUE2(Unit*, "find target", "heigan the unclean");
+
+        if (!_unit)
+            return false;
+
+        bool fast = ComputeFast();
+        if (fast != _was_fast || _phase_start_ms == 0)
+        {
+            _phase_start_ms = getMSTime();
+            _was_fast = fast;
+        }
+        return true;
+    }
+
+    bool IsFastDance() const { return _was_fast; }
+
+    // The section that must be SAFE at the next eruption pulse. Bots move
+    // there right after the previous pulse, so they arrive with a full
+    // period of travel budget.
+    uint32 NextSafeSection() const
+    {
+        uint32 first = _was_fast ? HeiganDance::FAST_FIRST_MS
+                                 : HeiganDance::SLOW_FIRST_MS;
+        uint32 period = _was_fast ? HeiganDance::FAST_PERIOD_MS
+                                  : HeiganDance::SLOW_PERIOD_MS;
+        uint32 elapsed = getMSTime() - _phase_start_ms;
+
+        uint32 nextK = 0;
+        if (elapsed >= first)
+            nextK = (elapsed - first) / period + 1;
+
+        return HeiganDance::SEQ[nextK % 6];
+    }
+
+    // All bots stack on the exact band waypoint. WoW has no player-player
+    // collision, so stacking is safe and it guarantees every bot is dead
+    // center in the safe wedge -- near the pivot the wedges are narrow, so any
+    // per-bot spread risks spilling into the adjacent erupting section.
+    void SafeWaypoint(uint32 section, float& x, float& y, float& z) const
+    {
+        if (section > 3)
+            section = 3;
+
+        x = HeiganDance::WAYPOINT[section][0];
+        y = HeiganDance::WAYPOINT[section][1];
+        z = HeiganDance::WAYPOINT[section][2];
+    }
+
+private:
+    // Heigan is REACT_PASSIVE only during the fast (safety) dance.
+    bool ComputeFast() const
+    {
+        if (!_unit)
+            return false;
+
+        Creature* c = _unit->ToCreature();
+        return c && c->GetReactState() == REACT_PASSIVE;
+    }
+    void Reset()
+    {
+        _unit = nullptr;
+        _phase_start_ms = 0;
+        _was_fast = false;
+    }
+
+    Unit* _unit = nullptr;
+    uint32 _phase_start_ms = 0;
+    bool _was_fast = false;
+};
+
 #endif

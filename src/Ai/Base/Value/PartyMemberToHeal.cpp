@@ -74,6 +74,7 @@ Unit* PartyMemberToHeal::Calculate()
 
     // Resolve once, not once per candidate. Explicit focus-heal commands above retain priority.
     Player* twinsTank = TempleOfAhnQirajHelpers::GetTwinsHealerTank(bot, botAI);
+    Player* twinsCasterVictim = TempleOfAhnQirajHelpers::GetTwinsCasterVictim(bot);
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
         Player* player = gref->GetSource();
@@ -93,7 +94,7 @@ Unit* PartyMemberToHeal::Calculate()
                 {
                     probeValue = health + player->GetDistance2d(bot) / 10.0f;
                 }
-                if (twinsTank && health < 90.0f && player == twinsTank)
+                if (health < 90.0f && (player == twinsTank || player == twinsCasterVictim))
                     probeValue -= 20.0f;
                 // An assignment is a preference, not permission to ignore a nearby dying player.
                 if (twinsTank && health < 30.0f)

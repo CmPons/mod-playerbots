@@ -106,6 +106,8 @@ public:
     bool IsRandomBot(ObjectGuid::LowType bot);
     bool IsAddclassBot(Player* bot);
     bool IsAddclassBot(ObjectGuid::LowType bot);
+    bool IsWorldBot(ObjectGuid::LowType bot) const;
+    bool AddWorldBot(ObjectGuid::LowType bot);
     bool IsPersistentCompanion(Player* bot);
     bool IsPersistentCompanion(ObjectGuid::LowType bot);
     void Randomize(Player* bot);
@@ -256,6 +258,10 @@ private:
     std::unordered_map<uint32, PersistentCompanionCacheEntry> persistentCompanionCache;
     std::unordered_map<uint32, BotEventCache> eventCache;
     std::list<uint32> currentBots;
+    // Startup-only character opt-ins; account type and ownership remain unchanged.
+    std::unordered_set<uint32> worldBotGuids;
+    bool worldBotGuidsLoaded = false;
+    void LoadWorldBotGuids();
     uint32 bgBotsCount;
     uint32 playersLevel;
 

@@ -21,6 +21,7 @@ Event Trigger::Check()
     if (IsActive())
     {
         Event event(getName());
+        event.SetScheduled(true); // Predicate event, not a chat/packet trigger override.
         return event;
     }
 

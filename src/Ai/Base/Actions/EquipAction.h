@@ -22,7 +22,9 @@ public:
 
     bool Execute(Event event) override;
     void EquipItems(ItemIds ids);
-    ItemIds SelectInventoryItemsToEquip();
+
+protected:
+    void EquipInventoryUpgrades();
 
 private:
     void EquipItem(FindItemVisitor* visitor);

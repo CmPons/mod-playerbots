@@ -5,6 +5,7 @@
  */
 
 #include "MovementActions.h"
+#include "RaidCombatPolicy.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -21,6 +22,8 @@
 #include "Map.h"
 #include "MotionMaster.h"
 #include "MoveSplineInitArgs.h"
+#include "MoveSplineInit.h"
+#include "MoveSpline.h"
 #include "MovementGenerator.h"
 #include "ObjectDefines.h"
 #include "ObjectGuid.h"
@@ -59,6 +62,39 @@ void MovementAction::CreateWp(Player* wpOwner, float x, float y, float z, float 
 
     if (!important)
         wpCreature->SetObjectScale(0.5f);
+}
+
+bool MovementAction::MoveCheckedCthunPath(Movement::PointsArray const& path, uint64 owner)
+{
+    if (path.size() < 2 || path.size() > 64 || !IsMovingAllowed() || bot->GetTransport() ||
+        bot->GetVehicle() || bot->IsFlying() || bot->isSwimming() ||
+        IsWaitingForLastMove(MovementPriority::MOVEMENT_COMBAT))
+        return false;
+    auto const& start = path.front();
+    if (bot->GetExactDist(start.x, start.y, start.z) > 0.01f)
+        return false;
+    // StopMovingOnCurrentPos disables the preceding spline before Launch can interpolate it.
+    // With no transport, MovebyPath copies these linear points unchanged; no pathfinding,
+    // smoothing or hover/water coordinate correction occurs in this seam.
+    bot->StopMovingOnCurrentPos();
+    bot->GetMotionMaster()->Clear();
+    bot->GetMotionMaster()->MoveIdle();
+    if (bot->IsSitState())
+        bot->SetStandState(UNIT_STAND_STATE_STAND);
+    bot->SetWalk(false);
+    Movement::MoveSplineInit init(bot);
+    init.MovebyPath(path);
+    init.SetWalk(false);
+    int32 const duration = init.Launch();
+    if (duration <= 0)
+        return false;
+    auto const& end = path.back();
+    LastMovement& last = AI_VALUE(LastMovement&, "last movement");
+    last.Set(bot->GetMapId(), end.x, end.y, end.z, bot->GetOrientation(),
+        std::min(float(duration), float(sPlayerbotAIConfig.maxWaitForMove)), MovementPriority::MOVEMENT_COMBAT);
+    last.cthunOwner = owner;
+    last.cthunSpline = bot->movespline->GetId();
+    return true;
 }
 
 bool MovementAction::JumpTo(uint32 mapId, float x, float y, float z, MovementPriority priority)
@@ -200,6 +236,66 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool /*idle
         float distance = vehicleBase->GetExactDist(x, y, z);  // use vehicle distance, not bot
         if (distance > 0.01f)
         {
+            // Wintergrasp: never drive a siege vehicle through standing walls/doors — they are
+            // dynamic GO WMOs absent from the navmesh, so a generated path happily crosses them
+            // (combat-chase drove demolishers through the keep, runtime-observed). Truncate the
+            // move at the last wall-clear path point; first segment exempt (a vehicle against a
+            // structure false-positives on it).
+            if (bot->GetZoneId() == 4197 && generatePath)
+            {
+                // Center ray + 3y side rays (wide hull); first segment exempt only while roofed
+                // by a structure (escaping the workshop bay) — a blanket exemption rolls forward
+                // with re-pathing and drives vehicles into towers.
+                // Wall ray + climb rejection (no lateral side-rays: they over-block the
+                // tower-flanked gate approach and stall the siege — see WintergraspSiegeStrategy).
+                auto wgSegmentClear = [&](G3D::Vector3 const& a, G3D::Vector3 const& b)
+                {
+                    if (b.z - a.z > 2.5f)   // vehicles don't climb rampart stairs
+                        return false;
+
+                    // Fix 4a: keep siege vehicles out of deep water (they can't swim); bridges
+                    // snap to their deck (above the surface) and pass. Mirror of
+                    // WintergraspSiegeStrategy::SegmentClearWide — keep the 1.5y depth in sync.
+                    if (vehicleBase->GetMap()->IsUnderWater(vehicleBase->GetPhaseMask(),
+                                                            b.x, b.y, b.z, 1.5f))
+                        return false;
+
+                    return vehicleBase->GetMap()->isInLineOfSight(
+                        a.x, a.y, a.z + 2.0f, b.x, b.y, b.z + 2.0f,
+                        vehicleBase->GetPhaseMask(), LINEOFSIGHT_CHECK_GOBJECT_WMO,
+                        VMAP::ModelIgnoreFlags::Nothing);
+                };
+
+                PathGenerator wgPath(vehicleBase);
+                wgPath.CalculatePath(x, y, z, false);
+                auto const& wgPts = wgPath.GetPath();
+                if (wgPts.size() >= 2)
+                {
+                    bool escapeOk = !vehicleBase->GetMap()->isInLineOfSight(
+                        vehicleBase->GetPositionX(), vehicleBase->GetPositionY(), vehicleBase->GetPositionZ() + 0.5f,
+                        vehicleBase->GetPositionX(), vehicleBase->GetPositionY(), vehicleBase->GetPositionZ() + 40.0f,
+                        vehicleBase->GetPhaseMask(), LINEOFSIGHT_CHECK_GOBJECT_WMO,
+                        VMAP::ModelIgnoreFlags::Nothing);
+                    size_t lastClear = wgPts.size() - 1;
+                    for (size_t i = 1; i < wgPts.size(); ++i)
+                    {
+                        bool clear = wgSegmentClear(wgPts[i - 1], wgPts[i]);
+                        if (!clear && i == 1 && escapeOk)
+                            continue;
+                        if (!clear)
+                        {
+                            lastClear = i - 1;
+                            break;
+                        }
+                    }
+                    if (lastClear == 0)
+                        return false;   // wall right ahead: hold rather than clip
+                    x = wgPts[lastClear].x;
+                    y = wgPts[lastClear].y;
+                    z = wgPts[lastClear].z;
+                }
+            }
+
             DoMovePoint(vehicleBase, x, y, z, generatePath, backwards);
             float speed = backwards ? vehicleBase->GetSpeed(MOVE_RUN_BACK) : vehicleBase->GetSpeed(MOVE_RUN);
             float delay = 1000.0f * (distance / speed);
@@ -801,6 +897,8 @@ bool MovementAction::MoveTo(WorldObject* target, float distance, MovementPriorit
 
 bool MovementAction::ReachCombatTo(Unit* target, float distance)
 {
+    if (botAI->raidCombat.scheduled && RaidCombat::HasMovementClaim(*botAI))
+        return false;
     if (!IsMovingAllowed(target))
         return false;
 
@@ -1100,6 +1198,8 @@ void MovementAction::UpdateMovementState()
 
 bool MovementAction::Follow(Unit* target, float distance, float angle)
 {
+    if (botAI->raidCombat.scheduled && RaidCombat::HasMovementClaim(*botAI))
+        return false;
     UpdateMovementState();
 
     if (!target)
@@ -1264,18 +1364,53 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
     {
         Unit* currentTarget = ServerFacade::instance().GetChaseTarget(bot);
         if (currentTarget && currentTarget->GetGUID() == target->GetGUID())
+        {
+            RecordCthunFollow();
+            if (!botAI->raidCombat.scheduled)
+                botAI->raidCombat.automaticMotion = 0; // Never relabel an existing manual/unknown follow.
             return false;
+        }
     }
 
     if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
         bot->GetMotionMaster()->Clear();
 
     bot->GetMotionMaster()->MoveFollow(target, distance, angle);
+    RecordCthunFollow();
+    RaidCombat::RecordScheduledMotion(*botAI);
     return true;
+}
+
+void MovementAction::RecordCthunFollow()
+{
+    // API2 uses generator provenance without clearing LastMovement/nonpolicy leases.
+    if (bot->GetMapId() != 531 || RaidCombat::UsesCombatPolicy(*botAI))
+        return;
+    LastMovement& last = AI_VALUE(LastMovement&, "last movement");
+    uint32 const spline = bot->movespline->GetId();
+    // Engine::ExecuteAction marks direct requests verbose before ListenAndExecute, including
+    // remote "do follow" without an Event owner. Normal scheduled FollowAction never sets it.
+    bool const explicitFollow = getName() == "follow chat shortcut" || (getName() == "follow" && verbose);
+    if (explicitFollow)
+    {
+        last.clear();
+        last.cthunManual = spline;
+    }
+    else if (getName() == "follow" && last.cthunManual != spline)
+    {
+        last.clear();
+        last.cthunAutomatic = spline;
+    }
+    // FollowAction does not otherwise use verbose. Consume this one direct request marker;
+    // do not turn ordinary PvE follow into a permanent disable-until-go policy override.
+    if (getName() == "follow")
+        verbose = false;
 }
 
 bool MovementAction::ChaseTo(WorldObject* obj, float distance)
 {
+    if (botAI->raidCombat.scheduled && RaidCombat::HasMovementClaim(*botAI))
+        return false;
     if (!IsMovingAllowed())
     {
         return false;
@@ -1305,6 +1440,7 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance)
 
     // bot->GetMotionMaster()->Clear();
     bot->GetMotionMaster()->MoveChase((Unit*)obj, distance);
+    RaidCombat::RecordScheduledMotion(*botAI);
 
     // TODO shouldnt this use "last movement" value?
     WaitForReach(bot->GetExactDist2d(obj) - distance);

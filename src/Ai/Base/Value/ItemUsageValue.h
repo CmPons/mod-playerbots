@@ -48,7 +48,8 @@ public:
     ItemUsage Calculate() override;
 
 protected:
-    ItemUsage QueryItemUsageForEquip(ItemTemplate const* proto, int32 randomPropertyId = 0);
+    ItemUsage QueryItemUsageForEquip(ItemTemplate const* proto, int32 randomPropertyId = 0,
+                                    Item* candidateItem = nullptr);
     ItemUsage QueryItemUsageForAmmo(ItemTemplate const* proto);
     ParsedItemUsage GetItemIdFromQualifier();
 
@@ -79,6 +80,10 @@ public:
     }
 
     ItemUsage Calculate() override;
+    ItemUsage CalculateForItem(Item* item);
+
+private:
+    ItemUsage CalculateUsage(ItemTemplate const* proto, int32 randomPropertyId, Item* candidateItem = nullptr);
 };
 
 #endif

@@ -5,6 +5,8 @@
  */
 
 #include "AiFactory.h"
+#include "Battlefield.h"
+#include "BattlefieldMgr.h"
 
 #include "BattlegroundMgr.h"
 #include "DKAiObjectContext.h"
@@ -495,6 +497,18 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         engine->removeStrategy("threat", false);
         engine->addStrategy("boost", false);
     }
+
+    // Phase 3 (Wintergrasp siege): keep the siege strategy active in combat too, so a demolisher
+    // keeps firing at the wall while defenders are attacking it (mirrors IsleStrategy being on both
+    // engines). BOTH teams: the attacker build/drive path self-gates on team via "wg siege
+    // active"; defenders need the strategy's in-vehicle fire-cannon trigger to man keep cannons.
+    if (player->GetZoneId() == 4197 /*Wintergrasp*/)
+    {
+        Battlefield* bf = sBattlefieldMgr->GetBattlefieldToZoneId(4197);
+        if (bf && bf->IsWarTime() &&
+            sConfigMgr->GetOption<bool>("WintergraspBots.SiegeEnable", true))
+            engine->addStrategy("wg siege", false);
+    }
 }
 
 Engine* AiFactory::createCombatEngine(Player* player, PlayerbotAI* const facade, AiObjectContext* aiObjectContext)
@@ -710,6 +724,28 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         {
             nonCombatEngine->addStrategy("arena", false);
             nonCombatEngine->removeStrategy("mount", false);
+        }
+    }
+
+    // Wintergrasp: WG is overworld and not a Battleground, so the BG switch above misses it.
+    // Give combatants the same PvP loadout and drop the wander strategies (travel/rpg/grind) so
+    // they fight the enemy faction instead of grinding/pathing out of the zone.
+    if (player->GetZoneId() == 4197 /*Wintergrasp*/)
+    {
+        Battlefield* bf = sBattlefieldMgr->GetBattlefieldToZoneId(4197);
+        if (bf && bf->IsWarTime())
+        {
+            nonCombatEngine->addStrategiesNoInit("pvp", "dps assist", "attack tagged", nullptr);
+            nonCombatEngine->removeStrategy("custom::say", false);
+            nonCombatEngine->removeStrategy("travel", false);
+            nonCombatEngine->removeStrategy("rpg", false);
+            nonCombatEngine->removeStrategy("grind", false);
+
+            // Phase 3: attacker bots build + pilot demolishers to break the keep (self-gated by
+            // the trigger on rank/cap); defenders get the strategy too for its in-vehicle
+            // fire-cannon trigger (manned keep tower cannons).
+            if (sConfigMgr->GetOption<bool>("WintergraspBots.SiegeEnable", true))
+                nonCombatEngine->addStrategy("wg siege", false);
         }
     }
 }

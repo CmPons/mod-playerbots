@@ -29,6 +29,10 @@ LastMovement::LastMovement(LastMovement& other)
 
 void LastMovement::clear()
 {
+    cthunOwner = 0;
+    cthunSpline = 0;
+    cthunAutomatic = 0;
+    cthunManual = 0;
     lastMoveShort = WorldPosition();
     lastPath.clear();
     lastMoveToMapId = 0;
@@ -55,6 +59,10 @@ void LastMovement::Set(Unit* follow)
 
 void LastMovement::Set(uint32 mapId, float x, float y, float z, float ori, float delayTime, MovementPriority pri)
 {
+    cthunOwner = 0;
+    cthunSpline = 0;
+    cthunAutomatic = 0;
+    cthunManual = 0;
     lastMoveToMapId = mapId;
     lastMoveToX = x;
     lastMoveToY = y;
@@ -69,8 +77,19 @@ void LastMovement::Set(uint32 mapId, float x, float y, float z, float ori, float
 
 void LastMovement::setShort(WorldPosition point)
 {
+    cthunOwner = 0;
+    cthunSpline = 0;
+    cthunAutomatic = 0;
+    cthunManual = 0;
     lastMoveShort = point;
     lastFollow = nullptr;
 }
 
-void LastMovement::setPath(TravelPath path) { lastPath = path; }
+void LastMovement::setPath(TravelPath path)
+{
+    cthunOwner = 0;
+    cthunSpline = 0;
+    cthunAutomatic = 0;
+    cthunManual = 0;
+    lastPath = path;
+}

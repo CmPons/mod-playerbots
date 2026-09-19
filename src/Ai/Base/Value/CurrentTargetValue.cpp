@@ -5,11 +5,17 @@
  */
 
 #include "CurrentTargetValue.h"
+#include "RaidCombatPolicy.h"
 
 #include "Playerbots.h"
 
 Unit* CurrentTargetValue::Get()
 {
+    // Explicit/native prioritized targets (including attack-my-target and raid markers) win.
+    if (botAI->raidCombat.scheduled &&
+        botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets")->Get().empty())
+        if (Unit* preferred = RaidCombat::PreferredTarget(*botAI))
+            return preferred;
     if (selection.IsEmpty())
         return nullptr;
 

@@ -602,6 +602,14 @@ void StatsWeightCalculator::CalculateItemSetMod(Player* player, ItemTemplate con
         }
     }
 
+    bool const comparingSlot = itemSetComparisonSlot_ < EQUIPMENT_SLOT_END;
+    if (comparingSlot)
+    {
+        Item const* excludedItem = player->GetItemByPos(INVENTORY_SLOT_BAG_0, itemSetComparisonSlot_);
+        if (excludedItem && excludedItem->GetTemplate()->ItemSet == itemSet && currentCount)
+            --currentCount;
+    }
+
     uint32 maxItems = 0;
     uint32 nextBonusAt = 0;
     for (size_t i = 0; i < MAX_ITEM_SET_SPELLS; ++i)
@@ -620,7 +628,8 @@ void StatsWeightCalculator::CalculateItemSetMod(Player* player, ItemTemplate con
 
     // Score unequipped set pieces as the set state they would create.  This lets tier/token items beat
     // small raw-stat sidegrades when they unlock or move a bot toward meaningful set bonuses.
-    uint32 const candidateCount = currentCount + (IsItemEquipped(player, proto->ItemId) ? 0 : 1);
+    uint32 const candidateCount = currentCount +
+        (comparingSlot || !IsItemEquipped(player, proto->ItemId) ? 1 : 0);
 
     float multiplier = 1.08f + 0.07f * std::min(candidateCount, maxItems);
 

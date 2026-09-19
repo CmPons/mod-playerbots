@@ -8,6 +8,7 @@
 #define PLAYERBOTS_ACTIONCONTEXT_H
 
 #include "AddLootAction.h"
+#include "ArenaCoordActions.h"
 #include "AttackAction.h"
 #include "ShareQuestAction.h"
 #include "BattleGroundTactics.h"
@@ -30,6 +31,7 @@
 #include "FollowActions.h"
 #include "GenericActions.h"
 #include "GenericSpellActions.h"
+#include "WintergraspSiegeStrategy.h"
 #include "GiveItemAction.h"
 #include "GreetAction.h"
 #include "GuildAcceptAction.h"
@@ -179,6 +181,7 @@ public:
         creators["stoneform"] = &ActionContext::stoneform;
         creators["escape artist"] = &ActionContext::escape_artist;
         creators["use trinket"] = &ActionContext::use_trinket;
+        creators["arena pvp trinket"] = &ActionContext::arena_pvp_trinket;
         creators["auto talents"] = &ActionContext::auto_talents;
         creators["auto share quest"] = &ActionContext::auto_share_quest;
         creators["auto maintenance on levelup"] = &ActionContext::auto_maintenance_on_levelup;
@@ -237,6 +240,7 @@ public:
         creators["steam blast"] = &ActionContext::steam_blast;
         creators["napalm"] = &ActionContext::napalm;
         creators["fire cannon"] = &ActionContext::fire_cannon;
+        creators["wg siege"] = &ActionContext::wg_siege;
         creators["incendiary rocket"] = &ActionContext::incendiary_rocket;
         creators["rocket blast"] = &ActionContext::rocket_blast;
         creators["blade salvo"] = &ActionContext::blade_salvo;
@@ -386,6 +390,7 @@ private:
     static Action* stoneform(PlayerbotAI* botAI) { return new CastStoneformAction(botAI); }
     static Action* escape_artist(PlayerbotAI* botAI) { return new CastEscapeArtistAction(botAI); }
     static Action* use_trinket(PlayerbotAI* botAI) { return new UseTrinketAction(botAI); }
+    static Action* arena_pvp_trinket(PlayerbotAI* botAI) { return new ArenaPvpTrinketAction(botAI); }
     static Action* auto_talents(PlayerbotAI* botAI) { return new AutoSetTalentsAction(botAI); }
     static Action* auto_share_quest(PlayerbotAI* ai) { return new AutoShareQuestAction(ai); }
     static Action* auto_maintenance_on_levelup(PlayerbotAI* botAI) { return new AutoMaintenanceOnLevelupAction(botAI); }
@@ -444,6 +449,7 @@ private:
     static Action* steam_rush(PlayerbotAI* botAI) { return new CastSteamRushAction(botAI); }
     static Action* napalm(PlayerbotAI* botAI) { return new CastNapalmAction(botAI); }
     static Action* fire_cannon(PlayerbotAI* botAI) { return new CastFireCannonAction(botAI); }
+    static Action* wg_siege(PlayerbotAI* botAI) { return new WintergraspSiegeAction(botAI); }
     static Action* incendiary_rocket(PlayerbotAI* botAI) { return new CastIncendiaryRocketAction(botAI); }
     static Action* rocket_blast(PlayerbotAI* botAI) { return new CastRocketBlastAction(botAI); }
     static Action* glaive_throw(PlayerbotAI* botAI) { return new CastGlaiveThrowAction(botAI); }

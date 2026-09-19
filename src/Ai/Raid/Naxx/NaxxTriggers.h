@@ -64,19 +64,17 @@ private:
     static constexpr uint32 CloudRotationDelayMs = 15000;
 };
 
-//class HeiganMeleeTrigger : public Trigger
-//{
-//public:
-//    HeiganMeleeTrigger(PlayerbotAI* ai) : Trigger(ai, "heigan melee") {}
-//    virtual bool IsActive();
-//};
-//
-//class HeiganRangedTrigger : public Trigger
-//{
-//public:
-//    HeiganRangedTrigger(PlayerbotAI* ai) : Trigger(ai, "heigan ranged") {}
-//    bool IsActive() override;
-//};
+class HeiganDanceTrigger : public Trigger
+{
+public:
+    HeiganDanceTrigger(PlayerbotAI* ai) : Trigger(ai, "heigan dance"), helper(ai)
+    {
+    }
+    bool IsActive() override;
+
+private:
+    HeiganBossHelper helper;
+};
 
 class RazuviousTankTrigger : public Trigger
 {

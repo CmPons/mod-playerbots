@@ -15,9 +15,27 @@
 #include "RandomPlayerbotMgr.h"
 #include "ServerFacade.h"
 #include "Corpse.h"
+#include "Battlefield.h"
+#include "BattlefieldMgr.h"
+
+namespace
+{
+    // WG and other outdoor Battlefields are not Battlegrounds (Player::InBattleground() is false),
+    // but deaths there should resolve via the battlefield spirit-healer mass-res, not a corpse-run.
+    bool InActiveBattlefield(Player* bot)
+    {
+        Battlefield* bf = sBattlefieldMgr->GetBattlefieldToZoneId(bot->GetZoneId());
+        return bf && bf->IsWarTime();
+    }
+}
 
 bool ReviveFromCorpseAction::Execute(Event event)
 {
+    // Wintergrasp/battlefield: revival is handled by the spirit-healer mass-res — don't reclaim
+    // the corpse (which would resurrect the bot out in enemy territory where it died).
+    if (!bot->InBattleground() && InActiveBattlefield(bot))
+        return false;
+
     Player* groupLeader = botAI->GetGroupLeader();
     Corpse* corpse = bot->GetCorpse();
 
@@ -77,7 +95,7 @@ bool ReviveFromCorpseAction::Execute(Event event)
 
 bool FindCorpseAction::Execute(Event /*event*/)
 {
-    if (bot->InBattleground())
+    if (bot->InBattleground() || InActiveBattlefield(bot))
         return false;
 
     Player* groupLeader = botAI->GetGroupLeader();
@@ -200,7 +218,7 @@ bool FindCorpseAction::Execute(Event /*event*/)
 
 bool FindCorpseAction::isUseful()
 {
-    if (bot->InBattleground())
+    if (bot->InBattleground() || InActiveBattlefield(bot))
         return false;
 
     return bot->GetCorpse();

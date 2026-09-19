@@ -11,6 +11,8 @@
 #include <string>
 
 #include "AiFactory.h"
+#include "Battlefield.h"
+#include "BattlefieldMgr.h"
 #include "BudgetValues.h"
 #include "ChannelMgr.h"
 #include "CharacterPackets.h"
@@ -196,6 +198,8 @@ PlayerbotAI::PlayerbotAI(Player* bot)
     botOutgoingPacketHandlers.AddHandler(SMSG_DUEL_REQUESTED, "duel requested");
     botOutgoingPacketHandlers.AddHandler(SMSG_INVENTORY_CHANGE_FAILURE, "inventory change failure");
     botOutgoingPacketHandlers.AddHandler(SMSG_BATTLEFIELD_STATUS, "bg status");
+    botOutgoingPacketHandlers.AddHandler(SMSG_BATTLEFIELD_MGR_ENTRY_INVITE, "accept wg war");
+    botOutgoingPacketHandlers.AddHandler(SMSG_BATTLEFIELD_MGR_QUEUE_INVITE, "accept wg queue");
     botOutgoingPacketHandlers.AddHandler(SMSG_LFG_ROLE_CHECK_UPDATE, "lfg role check");
     botOutgoingPacketHandlers.AddHandler(SMSG_LFG_PROPOSAL_UPDATE, "lfg proposal");
     botOutgoingPacketHandlers.AddHandler(SMSG_TEXT_EMOTE, "receive text emote");
@@ -438,6 +442,13 @@ void PlayerbotAI::UpdateAIGroupMaster()
 
     if (!master || (masterBotAI && !masterBotAI->IsRealPlayer()))
     {
+        // Never ACQUIRE a master through a battlefield-managed raid: Wintergrasp auto-groups
+        // every war participant, so a real player joining the battle would instantly become
+        // "owner" of every random bot in the raid (they all greet + follow instead of fighting
+        // the war). Real invites/parties are unaffected — those groups are not BF groups.
+        if (sRandomPlayerbotMgr.IsRandomBot(bot) && group->isBFGroup())
+            return;
+
         Player* newMaster = FindNewMaster();
         if (newMaster)
         {
@@ -477,10 +488,14 @@ void PlayerbotAI::UpdateAIInternal([[maybe_unused]] uint32 elapsed, bool minimal
     if (!bot->GetMap())
         return; // instances are created and destroyed on demand
 
-    // kinda expensive call to make on every single updateAI, do we really need this information?
-    std::string const mapString = WorldPosition(bot).isOverworld() ? std::to_string(bot->GetMapId()) : "I";
-    PerfMonitorOperation* pmo =
-        sPerfMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAIInternal " + mapString);
+    // The label costs a WorldPosition + std::to_string + string concat per bot per AI tick —
+    // only pay it when the perf monitor is actually collecting.
+    PerfMonitorOperation* pmo = nullptr;
+    if (sPlayerbotAIConfig.perfMonEnabled)
+    {
+        std::string const mapString = WorldPosition(bot).isOverworld() ? std::to_string(bot->GetMapId()) : "I";
+        pmo = sPerfMonitor.start(PERF_MON_TOTAL, "PlayerbotAI::UpdateAIInternal " + mapString);
+    }
 
     ExternalEventHelper helper(aiObjectContext);
 
@@ -1524,7 +1539,13 @@ void PlayerbotAI::DoNextAction(bool min)
 
     if (minimal)
     {
-        if (!bot->isAFK() && !bot->InBattleground() && !HasRealPlayerMaster())
+        // Wintergrasp bots: never self-AFK a battlefield-war participant. The WG battle kicks AFK
+        // players out of the zone every 20s and the director just teleports fresh ones in — a
+        // raid/zone revolving door (runtime-observed churn). WG is a Battlefield, not a
+        // Battleground, so the InBattleground() guard above doesn't cover it.
+        Battlefield* wgBf = sBattlefieldMgr->GetBattlefieldToZoneId(bot->GetZoneId());
+        bool inBattlefieldWar = wgBf && wgBf->IsWarTime();
+        if (!bot->isAFK() && !bot->InBattleground() && !inBattlefieldWar && !HasRealPlayerMaster())
             bot->ToggleAFK();
 
         SetNextCheckDelay(sPlayerbotAIConfig.passiveDelay);
@@ -1622,8 +1643,8 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
 {
     static const std::vector<std::string> allInstanceStrategies =
     {
-        "aq20", "blacktemple", "bwl", "gruulslair", "hyjal", "icc", "karazhan",
-        "magtheridon", "moltencore", "naxx", "onyxia", "rs", "ssc", "tbc-ac", "tempestkeep",
+        "aq20", "aq40", "blacktemple", "bwl", "gruulslair", "hyjal", "icc", "karazhan",
+        "magtheridon", "moltencore", "naxx", "onyxia", "rs", "ssc", "sunwell", "tbc-ac", "tempestkeep",
         "ulduar", "voa", "wotlk-an", "wotlk-cos", "wotlk-dtk", "wotlk-eoe", "wotlk-fos",
         "wotlk-gd", "wotlk-hol", "wotlk-hor", "wotlk-hos", "wotlk-nex", "wotlk-occ",
         "wotlk-ok", "wotlk-os", "wotlk-pos", "wotlk-toc", "wotlk-uk", "wotlk-up",
@@ -1650,6 +1671,9 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
             break;
         case 509:
             strategyName = "aq20";  // Ruins of Ahn'Qiraj
+            break;
+        case 531:
+            strategyName = "aq40";  // Temple of Ahn'Qiraj
             break;
         case 532:
             strategyName = "karazhan";  // Karazhan
@@ -1680,6 +1704,9 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
             break;
         case 568:
             strategyName = "zulaman";  // Zul'Aman
+            break;
+        case 580:
+            strategyName = "sunwell";  // Sunwell Plateau
             break;
         case 574:
             strategyName = "wotlk-uk";  // Utgarde Keep
@@ -4657,6 +4684,17 @@ bool PlayerbotAI::AllowActive(ActivityType activityType)
     // bot is waiting in a BG queue — stay active to speed up join
     if (bot->InBattlegroundQueue())
         return true;
+
+    // bot is a Wintergrasp combatant — stay fully active for the whole battle. WG is on the
+    // overworld (so isOverworld() above doesn't catch it) and is not a Battleground, so without
+    // this a WG bot goes inactive when no real player is near -> gets flagged AFK -> the WG
+    // battlefield kicks it (KickAfkPlayers) -> the director re-teleports it (the churn).
+    if (bot->GetZoneId() == 4197 /*Wintergrasp*/)
+    {
+        Battlefield* bf = sBattlefieldMgr->GetBattlefieldToZoneId(4197);
+        if (bf && bf->IsWarTime())
+            return true;
+    }
 
     // bot is in a guild that contains a real player
     if (sPlayerbotAIConfig.BotActiveAloneForceWhenInGuild)

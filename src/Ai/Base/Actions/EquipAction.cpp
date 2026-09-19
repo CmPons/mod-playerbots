@@ -358,16 +358,16 @@ void EquipAction::EquipItem(Item* item)
     botAI->TellMaster(out);
 }
 
-ItemIds EquipAction::SelectInventoryItemsToEquip()
+void EquipAction::EquipInventoryUpgrades()
 {
+    ItemUpgradeValue upgradeValue(botAI);
     CollectItemsVisitor visitor;
     IterateItems(&visitor, ITERATE_ITEMS_IN_BAGS);
 
-    ItemIds items;
     for (auto i = visitor.items.begin(); i != visitor.items.end(); ++i)
     {
         Item* item = *i;
-        if (!item)
+        if (!item || item->IsEquipped())
             continue;
 
         ItemTemplate const* itemTemplate = item->GetTemplate();
@@ -379,19 +379,12 @@ ItemIds EquipAction::SelectInventoryItemsToEquip()
         if (itemTemplate->InventoryType == INVTYPE_NON_EQUIP)
             continue;
 
-        int32 randomProperty = item->GetItemRandomPropertyId();
-        uint32 itemId = item->GetTemplate()->ItemId;
-        std::string itemUsageParam;
-        if (randomProperty != 0)
-            itemUsageParam = std::to_string(itemId) + "," + std::to_string(randomProperty);
-        else
-            itemUsageParam = std::to_string(itemId);
-
-        ItemUsage usage = AI_VALUE2(ItemUsage, "item upgrade", itemUsageParam);
+        // Evaluate each owned instance against gear left by the preceding successful swap.
+        // Do not batch item IDs: that loses random properties and permits stale upgrade decisions.
+        ItemUsage usage = upgradeValue.CalculateForItem(item);
         if (usage == ITEM_USAGE_EQUIP || usage == ITEM_USAGE_REPLACE || usage == ITEM_USAGE_BAD_EQUIP)
-            items.insert(itemId);
+            EquipItem(item);
     }
-    return items;
 }
 
 bool EquipUpgradesPacketAction::Execute(Event event)
@@ -431,14 +424,12 @@ bool EquipUpgradesPacketAction::Execute(Event event)
             return false;
     }
 
-    ItemIds items = SelectInventoryItemsToEquip();
-    EquipItems(items);
+    EquipInventoryUpgrades();
     return true;
 }
 
 bool EquipUpgradeAction::Execute(Event /*event*/)
 {
-    ItemIds items = SelectInventoryItemsToEquip();
-    EquipItems(items);
+    EquipInventoryUpgrades();
     return true;
 }

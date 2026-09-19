@@ -7,6 +7,7 @@
 #define PLAYERBOTS_PLAYERBOTAI_H
 
 #include <stack>
+#include "RaidCombatState.h"
 
 #include "Chat.h"
 #include "ChatFilter.h"
@@ -418,6 +419,7 @@ public:
     void ReInitCurrentEngine();
     void Reset(bool full = false);
     void LeaveOrDisbandGroup();
+    RaidCombat::State raidCombat;
     static bool IsTank(Player* player, bool bySpec = false);
     static bool IsHeal(Player* player, bool bySpec = false);
     static bool IsDps(Player* player, bool bySpec = false);

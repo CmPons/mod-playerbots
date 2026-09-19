@@ -9,6 +9,7 @@
 #include "ChatActionContext.h"
 #include "WorldPacketActionContext.h"
 #include "Aq20ActionContext.h"
+#include "Aq40ActionContext.h"
 #include "MCActionContext.h"
 #include "BWLActionContext.h"
 #include "KaraActionContext.h"
@@ -20,6 +21,7 @@
 #include "HyjalActionContext.h"
 #include "BTActionContext.h"
 #include "ZAActionContext.h"
+#include "SWPActionContext.h"
 #include "OSActionContext.h"
 #include "EoEActionContext.h"
 #include "VoAActionContext.h"
@@ -36,6 +38,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new ChatActionContext());
     actionContexts.Add(new WorldPacketActionContext());
     actionContexts.Add(new RaidAq20ActionContext());
+    actionContexts.Add(new RaidAq40ActionContext());
     actionContexts.Add(new RaidMcActionContext());
     actionContexts.Add(new RaidBwlActionContext());
     actionContexts.Add(new RaidKarazhanActionContext());
@@ -46,6 +49,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidHyjalSummitActionContext());
     actionContexts.Add(new RaidBlackTempleActionContext());
     actionContexts.Add(new RaidZulAmanActionContext());
+    actionContexts.Add(new RaidSunwellPlateauActionContext());
     actionContexts.Add(new RaidNaxxActionContext());
     actionContexts.Add(new RaidOsActionContext());
     actionContexts.Add(new RaidEoEActionContext());

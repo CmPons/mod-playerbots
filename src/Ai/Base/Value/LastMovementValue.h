@@ -40,6 +40,10 @@ public:
         lastPath = other.lastPath;
         nextTeleport = other.nextTeleport;
         priority = other.priority;
+        cthunOwner = 0;
+        cthunSpline = 0;
+        cthunAutomatic = 0;
+        cthunManual = 0;
         return *this;
     };
 
@@ -65,6 +69,11 @@ public:
     WorldPosition lastMoveShort;
     uint32 msTime;
     MovementPriority priority;
+    // Only the checked Cthun backend sets these after launch; ordinary setters relinquish ownership.
+    uint64 cthunOwner = 0;
+    uint32 cthunSpline = 0;
+    uint32 cthunAutomatic = 0;
+    uint32 cthunManual = 0;
     TravelPath lastPath;
     time_t nextTeleport;
     std::future<TravelPath> future;

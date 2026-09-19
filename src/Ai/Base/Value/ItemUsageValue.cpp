@@ -181,7 +181,8 @@ ItemUsage ItemUsageValue::Calculate()
     return ITEM_USAGE_NONE;
 }
 
-ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemTemplate const* itemProto, int32 randomPropertyId)
+ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemTemplate const* itemProto, int32 randomPropertyId,
+                                              Item* candidateItem)
 {
     if (bot->BotCanUseItem(itemProto) != EQUIP_ERR_OK)
         return ITEM_USAGE_NONE;
@@ -296,6 +297,18 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemTemplate const* itemProto, 
         }
     }
 
+    // Single-slot armor has one unambiguous replacement. Give the incumbent the same
+    // set-threshold premium as the candidate, rather than losing it once equipped.
+    // Paired slots and weapon rearrangements retain their existing scoring policy.
+    bool const compareSetReplacement = itemProto->Class == ITEM_CLASS_ARMOR &&
+        itemProto->InventoryType != INVTYPE_FINGER && itemProto->InventoryType != INVTYPE_TRINKET &&
+        dstSlot < EQUIPMENT_SLOT_END && dstSlot != EQUIPMENT_SLOT_OFFHAND;
+    if (compareSetReplacement)
+    {
+        calculator.SetItemSetComparisonSlot(dest & 0xFF);
+        itemScore = calculator.CalculateItem(itemProto->ItemId, randomPropertyId);
+    }
+
     for (uint8 i = 0; i < possibleSlots; i++)
     {
         bool shouldEquipInSlot = shouldEquip;
@@ -317,6 +330,24 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemTemplate const* itemProto, 
             // uint32 oldStatWeight = sRandomItemMgr.GetLiveStatWeight(bot, oldItemProto->ItemId);
             if (itemScore || oldScore)
                 shouldEquipInSlot = itemScore > oldScore * sPlayerbotAIConfig.equipUpgradeThreshold;
+
+            // Avoid set-piece oscillation: when two different same-slot set items trade set bonuses,
+            // each can look best only while the other one is equipped.  Require the candidate to also
+            // be a raw-stat upgrade before replacing the currently equipped set piece.
+            if (!compareSetReplacement && shouldEquipInSlot && itemProto->ItemSet && oldItemProto->ItemSet &&
+                itemProto->ItemSet != oldItemProto->ItemSet && itemProto->InventoryType == oldItemProto->InventoryType)
+            {
+                StatsWeightCalculator rawCalculator(bot);
+                rawCalculator.SetItemSetBonus(false);
+                rawCalculator.SetOverflowPenalty(false);
+                if (isPvp)
+                    rawCalculator.SetPvpSpec(true);
+
+                float const rawItemScore = rawCalculator.CalculateItem(itemProto->ItemId, randomPropertyId);
+                float const rawOldScore = rawCalculator.CalculateItem(oldItemProto->ItemId,
+                    oldItem->GetInt32Value(ITEM_FIELD_RANDOM_PROPERTIES_ID));
+                shouldEquipInSlot = rawItemScore > rawOldScore * sPlayerbotAIConfig.equipUpgradeThreshold;
+            }
         }
 
         // Bigger quiver
@@ -349,13 +380,16 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemTemplate const* itemProto, 
         // oldItemProto->ItemId)
         //     isBetter = true;
 
-        Item* item = CurrentItem(itemProto);
+        Item* item = candidateItem ? candidateItem : CurrentItem(itemProto);
         bool itemIsBroken =
             item && item->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0;
         bool oldItemIsBroken =
             oldItem->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && oldItem->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0;
 
-        if (itemProto->ItemId != oldItemProto->ItemId && (shouldEquipInSlot || !existingShouldEquip) && isBetter)
+        // Unsuitable-to-unsuitable swaps must not bypass the upgrade threshold/set comparison.
+        // Keep the fallback for replacing unsuitable gear with genuinely suitable gear.
+        if (itemProto->ItemId != oldItemProto->ItemId &&
+            (shouldEquipInSlot || (!existingShouldEquip && shouldEquip)) && isBetter)
         {
             switch (itemProto->Class)
             {
@@ -929,7 +963,22 @@ ItemUsage ItemUpgradeValue::Calculate()
     if (!proto)
         return ITEM_USAGE_NONE;
 
-    ItemUsage equip = QueryItemUsageForEquip(proto, randomPropertyId);
+    return CalculateUsage(proto, randomPropertyId);
+}
+
+ItemUsage ItemUpgradeValue::CalculateForItem(Item* item)
+{
+    if (!item || item->GetOwnerGUID() != bot->GetGUID() ||
+        !Player::IsInventoryPos(item->GetBagSlot(), item->GetSlot()) ||
+        bot->GetItemByPos(item->GetBagSlot(), item->GetSlot()) != item)
+        return ITEM_USAGE_NONE;
+
+    return CalculateUsage(item->GetTemplate(), item->GetItemRandomPropertyId(), item);
+}
+
+ItemUsage ItemUpgradeValue::CalculateUsage(ItemTemplate const* proto, int32 randomPropertyId, Item* candidateItem)
+{
+    ItemUsage equip = QueryItemUsageForEquip(proto, randomPropertyId, candidateItem);
     if (equip != ITEM_USAGE_NONE)
         return equip;
 
