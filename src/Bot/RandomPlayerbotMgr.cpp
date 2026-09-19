@@ -695,6 +695,37 @@ bool RandomPlayerbotMgr::IsWorldBot(ObjectGuid::LowType bot) const
     return worldBotGuids.find(bot) != worldBotGuids.end();
 }
 
+void RandomPlayerbotMgr::RestoreWorldBotSoloStrategies(Player* bot)
+{
+    PlayerbotAI* botAI = bot ? GET_PLAYERBOT_AI(bot) : nullptr;
+    if (!botAI || botAI->IsRealPlayer() || !IsWorldBot(bot->GetGUID().GetCounter()))
+        return;
+
+    // Saved raid profiles replace the factory defaults at login. Reconcile only the
+    // solo activity strategies, not combat/spec preferences or other saved values.
+    // Also prevent a previously saved solo profile from enabling roaming in a party.
+    botAI->ChangeStrategy("-grind,-new rpg,-rpg,-move random", BOT_STATE_NON_COMBAT);
+    if (bot->GetGroup() || botAI->GetMaster() || !WorldPosition(bot).isOverworld() ||
+        bot->InBattleground() || bot->InBattlegroundQueue() || IsInWintergraspWar(bot))
+        return;
+
+    for (std::string const strategy : {"stay", "passive", "runaway", "move from group"})
+        if (botAI->HasStrategy(strategy, BOT_STATE_NON_COMBAT) || botAI->HasStrategy(strategy, BOT_STATE_COMBAT))
+            return;
+    if (botAI->HasStrategy("follow", BOT_STATE_COMBAT))
+        return;
+
+    // Match AiFactory's free-world-bot choices. Ordinary non-combat "follow" is
+    // a factory default even without a master, not evidence of a manual leash.
+    botAI->ChangeStrategy("+grind", BOT_STATE_NON_COMBAT);
+    if (sPlayerbotAIConfig.enableNewRpgStrategy)
+        botAI->ChangeStrategy("+new rpg", BOT_STATE_NON_COMBAT);
+    else if (sPlayerbotAIConfig.autoDoQuests)
+        botAI->ChangeStrategy("+rpg", BOT_STATE_NON_COMBAT);
+    else
+        botAI->ChangeStrategy("+move random", BOT_STATE_NON_COMBAT);
+}
+
 bool RandomPlayerbotMgr::AddWorldBot(ObjectGuid::LowType bot)
 {
     if (!IsWorldBot(bot))
