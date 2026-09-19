@@ -109,6 +109,8 @@ public:
     bool IsWorldBot(ObjectGuid::LowType bot) const;
     bool AddWorldBot(ObjectGuid::LowType bot);
     void RestoreWorldBotSoloStrategies(Player* bot);
+    bool IsBattlegroundCompanion(ObjectGuid::LowType bot);
+    bool CanAutoJoinBattleground(Player* bot, bool arena = false);
     bool IsPersistentCompanion(Player* bot);
     bool IsPersistentCompanion(ObjectGuid::LowType bot);
     void Randomize(Player* bot);

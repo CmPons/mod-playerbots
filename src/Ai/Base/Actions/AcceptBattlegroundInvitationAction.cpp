@@ -8,9 +8,13 @@
 
 #include "Event.h"
 #include "PlayerbotAI.h"
+#include "RandomPlayerbotMgr.h"
 
 bool AcceptBgInvitationAction::Execute(Event /*event*/)
 {
+    if (!sRandomPlayerbotMgr.CanAutoJoinBattleground(bot))
+        return false;
+
     uint8 type = 0;                      // arenatype if arena
     uint8 unk2 = 0;                      // unk, can be 0x0 (may be if was invited?) and 0x1
     uint32 bgTypeId_ = BATTLEGROUND_WS;  // type id from dbc

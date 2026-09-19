@@ -77,8 +77,38 @@ public:
         PLAYERHOOK_CAN_PLAYER_USE_GUILD_CHAT,
         PLAYERHOOK_CAN_PLAYER_USE_CHANNEL_CHAT,
         PLAYERHOOK_ON_GIVE_EXP,
-        PLAYERHOOK_ON_BEFORE_TELEPORT
+        PLAYERHOOK_ON_BEFORE_TELEPORT,
+        PLAYERHOOK_CAN_JOIN_IN_BATTLEGROUND_QUEUE,
+        PLAYERHOOK_CAN_JOIN_IN_ARENA_QUEUE,
+        PLAYERHOOK_CAN_BATTLEFIELD_PORT
     }) {}
+
+    bool OnPlayerCanJoinInBattlegroundQueue(Player* player, ObjectGuid /*guid*/, BattlegroundTypeId /*type*/,
+                                           uint8 /*joinAsGroup*/, GroupJoinBattlegroundResult& err) override
+    {
+        if (sRandomPlayerbotMgr.CanAutoJoinBattleground(player))
+            return true;
+        err = ERR_GROUP_JOIN_BATTLEGROUND_FAIL;
+        return false;
+    }
+
+    bool OnPlayerCanJoinInArenaQueue(Player* player, ObjectGuid /*guid*/, uint8 /*slot*/,
+                                     BattlegroundTypeId /*type*/, uint8 /*joinAsGroup*/, uint8 /*rated*/,
+                                     GroupJoinBattlegroundResult& err) override
+    {
+        if (sRandomPlayerbotMgr.CanAutoJoinBattleground(player, true))
+            return true;
+        err = ERR_GROUP_JOIN_BATTLEGROUND_FAIL;
+        return false;
+    }
+
+    bool OnPlayerCanBattleFieldPort(Player* player, uint8 arenaType, BattlegroundTypeId /*type*/,
+                                   uint8 action) override
+    {
+        // Final guard at packet consumption, after any intervening party changes.
+        // Always allow leaving a queue or battleground.
+        return !action || sRandomPlayerbotMgr.CanAutoJoinBattleground(player, arenaType != 0);
+    }
 
     void OnPlayerLogin(Player* player) override
     {

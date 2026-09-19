@@ -17,6 +17,9 @@
 
 bool BGJoinAction::Execute(Event /*event*/)
 {
+    if (!sRandomPlayerbotMgr.CanAutoJoinBattleground(bot))
+        return false;
+
     uint32 queueType = AI_VALUE(uint32, "bg type");
     if (!queueType)  // force join to fill bg
     {
@@ -59,6 +62,9 @@ bool BGJoinAction::Execute(Event /*event*/)
 
 bool BGJoinAction::gatherArenaTeam(ArenaType type)
 {
+    if (!sRandomPlayerbotMgr.CanAutoJoinBattleground(bot, true))
+        return false;
+
     ArenaTeam* arenateam = sArenaTeamMgr->GetArenaTeamByCaptain(bot->GetGUID(), type);
 
     if (!arenateam)
@@ -73,7 +79,7 @@ bool BGJoinAction::gatherArenaTeam(ArenaType type)
     for (ArenaTeam::MemberList::iterator itr = arenateam->GetMembers().begin(); itr != arenateam->GetMembers().end();
          ++itr)
     {
-        if (sRandomPlayerbotMgr.IsPersistentCompanion(itr->Guid.GetCounter()))
+        if (sRandomPlayerbotMgr.IsBattlegroundCompanion(itr->Guid.GetCounter()))
             continue;
 
         bool offline = false;
@@ -198,6 +204,9 @@ bool BGJoinAction::gatherArenaTeam(ArenaType type)
 
 bool BGJoinAction::canJoinBg(BattlegroundQueueTypeId queueTypeId, BattlegroundBracketId bracketId)
 {
+    if (!sRandomPlayerbotMgr.CanAutoJoinBattleground(bot, BattlegroundMgr::BGArenaType(queueTypeId) != 0))
+        return false;
+
     // check if bot can join this bracket for the specific Battleground/Arena type
     BattlegroundTypeId bgTypeId = BattlegroundMgr::BGTemplateId(queueTypeId);
 
@@ -318,8 +327,8 @@ bool BGJoinAction::isUseful()
     if (!sPlayerbotAIConfig.randomBotJoinBG)
         return false;
 
-    // friend-listed random bots are player companions, not BG filler
-    if (sRandomPlayerbotMgr.IsPersistentCompanion(bot))
+    // Companion BG participation is solo-only, including group leaders.
+    if (!sRandomPlayerbotMgr.CanAutoJoinBattleground(bot))
         return false;
 
     // can't queue while in BG/Arena
@@ -390,9 +399,10 @@ bool BGJoinAction::isUseful()
 
 bool BGJoinAction::JoinQueue(uint32 type)
 {
-    // ignore if player is already in BG, is logging out, being teleported, or protected as a player companion
-    if (!bot || sRandomPlayerbotMgr.IsPersistentCompanion(bot) || (!bot->IsInWorld() && !bot->IsBeingTeleported()) ||
-        bot->InBattleground())
+    // Recheck after selection: a party invitation may have arrived meanwhile.
+    if (!sRandomPlayerbotMgr.CanAutoJoinBattleground(bot,
+            BattlegroundMgr::BGArenaType(BattlegroundQueueTypeId(type)) != 0) ||
+        (!bot->IsInWorld() && !bot->IsBeingTeleported()) || bot->InBattleground())
         return false;
 
     // get BG TypeId
@@ -805,6 +815,19 @@ bool BGStatusAction::Execute(Event event)
     BattlegroundTypeId _bgTypeId = BattlegroundMgr::BGTemplateId(queueTypeId);
     if (!queueTypeId)
         return false;
+
+    // A companion recruited after queueing must not be pulled out of that party.
+    // Cover both normal invitations and the WAIT_QUEUE force-join recovery path.
+    if ((statusid == STATUS_WAIT_QUEUE || statusid == STATUS_WAIT_JOIN) && !bot->InBattleground() &&
+        !sRandomPlayerbotMgr.CanAutoJoinBattleground(bot, BattlegroundMgr::BGArenaType(queueTypeId) != 0))
+    {
+        WorldPacket packet(CMSG_BATTLEFIELD_PORT, 20);
+        packet << uint8(BattlegroundMgr::BGArenaType(queueTypeId)) << uint8(0) << uint32(_bgTypeId)
+               << uint16(0x1F90) << uint8(0); // Leave queue, never leave/disband the player's group.
+        bot->GetSession()->QueuePacket(new WorldPacket(packet));
+        botAI->GetAiObjectContext()->GetValue<uint32>("bg type")->Set(0);
+        return true; // No strategy reset: preserve the player's current instructions.
+    }
 
     BattlegroundBracketId bracketId;
     Battleground* bg = sBattlegroundMgr->GetBattlegroundTemplate(_bgTypeId);

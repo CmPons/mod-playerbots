@@ -832,8 +832,10 @@ AiPlayerbot.RandomBotXPRate = 1.0
 
 # Treat random bots on a real player's friends list as persistent companions.
 # Protected companions are excluded from random re-level/regear/spec randomization,
-# random teleport/roaming moves, and random BG/LFG filler queues. They can still be
-# added/removed by the player and still use normal explicit playerbot commands.
+# scheduler teleports and random LFG filler queues. Solo battlegrounds are allowed,
+# but not while grouped, invited, mastered, or under stay/passive/manual follow orders.
+# They are not drafted into arena teams. Opted-in WorldBotGuids use the same BG guards
+# even outside the friend cap. Human queueing and non-BG bot commands are unchanged.
 # Default: 1 (enabled)
 AiPlayerbot.PersistentCompanionsFromFriends = 1
 

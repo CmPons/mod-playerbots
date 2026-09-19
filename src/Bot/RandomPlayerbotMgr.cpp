@@ -695,6 +695,34 @@ bool RandomPlayerbotMgr::IsWorldBot(ObjectGuid::LowType bot) const
     return worldBotGuids.find(bot) != worldBotGuids.end();
 }
 
+bool RandomPlayerbotMgr::IsBattlegroundCompanion(ObjectGuid::LowType bot)
+{
+    // Include every opted-in world bot, even beyond the friend-protection cap.
+    return IsWorldBot(bot) || IsPersistentCompanion(bot);
+}
+
+bool RandomPlayerbotMgr::CanAutoJoinBattleground(Player* bot, bool arena)
+{
+    if (!bot)
+        return false;
+
+    PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
+    if (!botAI || botAI->IsRealPlayer() || !IsBattlegroundCompanion(bot->GetGUID().GetCounter()))
+        return true; // Do not change human queueing or the ordinary filler population.
+
+    // Solo BGs are allowed; arena team gathering and premades are not. Recheck
+    // pending invitations too, so joining the player's party wins over matchmaking.
+    if (!sPlayerbotAIConfig.randomBotJoinBG || arena || bot->GetGroup() || bot->GetGroupInvite() ||
+        botAI->GetMaster() || !WorldPosition(bot).isOverworld() || IsInWintergraspWar(bot))
+        return false;
+
+    for (std::string const strategy : {"stay", "passive", "runaway", "move from group"})
+        if (botAI->HasStrategy(strategy, BOT_STATE_NON_COMBAT) || botAI->HasStrategy(strategy, BOT_STATE_COMBAT))
+            return false;
+
+    return !botAI->HasStrategy("follow", BOT_STATE_COMBAT);
+}
+
 void RandomPlayerbotMgr::RestoreWorldBotSoloStrategies(Player* bot)
 {
     PlayerbotAI* botAI = bot ? GET_PLAYERBOT_AI(bot) : nullptr;
@@ -724,6 +752,9 @@ void RandomPlayerbotMgr::RestoreWorldBotSoloStrategies(Player* bot)
         botAI->ChangeStrategy("+rpg", BOT_STATE_NON_COMBAT);
     else
         botAI->ChangeStrategy("+move random", BOT_STATE_NON_COMBAT);
+
+    if (sPlayerbotAIConfig.randomBotJoinBG)
+        botAI->ChangeStrategy("+bg", BOT_STATE_NON_COMBAT);
 }
 
 bool RandomPlayerbotMgr::AddWorldBot(ObjectGuid::LowType bot)
