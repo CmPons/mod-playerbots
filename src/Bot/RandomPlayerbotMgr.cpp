@@ -729,8 +729,8 @@ void RandomPlayerbotMgr::RestoreWorldBotSoloStrategies(Player* bot)
     if (!botAI || botAI->IsRealPlayer() || !IsWorldBot(bot->GetGUID().GetCounter()))
         return;
 
-    // Saved raid profiles replace the factory defaults at login. Reconcile only the
-    // solo activity strategies, not combat/spec preferences or other saved values.
+    // Saved raid profiles replace the factory defaults at login. Reconcile solo
+    // activity and healer damage support without replacing combat roles or saved values.
     // Also prevent a previously saved solo profile from enabling roaming in a party.
     botAI->ChangeStrategy("-grind,-new rpg,-rpg,-move random", BOT_STATE_NON_COMBAT);
     if (bot->GetGroup() || botAI->GetMaster() || !WorldPosition(bot).isOverworld() ||
@@ -755,6 +755,11 @@ void RandomPlayerbotMgr::RestoreWorldBotSoloStrategies(Player* bot)
 
     if (sPlayerbotAIConfig.randomBotJoinBG)
         botAI->ChangeStrategy("+bg", BOT_STATE_NON_COMBAT);
+
+    // A saved healing-only profile can select a grind target but never damage it.
+    // Use the loaded healer role, not talents, and retain configured map restrictions.
+    if (PlayerbotAI::IsHeal(bot) && !sPlayerbotAIConfig.IsRestrictedHealerDPSMap(bot->GetMapId()))
+        botAI->ChangeStrategy("+healer dps", BOT_STATE_COMBAT);
 }
 
 bool RandomPlayerbotMgr::AddWorldBot(ObjectGuid::LowType bot)

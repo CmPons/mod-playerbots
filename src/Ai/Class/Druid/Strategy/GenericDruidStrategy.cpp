@@ -149,10 +149,15 @@ void DruidCcStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 
 void DruidHealerDpsStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    // Solo travel may leave a healer in seal/cheetah form when it picks a target.
+    // Cancel only those forms (plus Tree as before), behind the healing/mana gate.
+    // Aura-specific cancellation avoids caster form's unrelated mana threshold.
     triggers.push_back(
         new TriggerNode("healer should attack",
                         {
                             NextAction("cancel tree form", 5.4f),
+                            NextAction("cancel aquatic form", 5.4f),
+                            NextAction("cancel travel form", 5.4f),
                             NextAction("moonfire",         5.3f),
                             NextAction("wrath",            5.2f),
                             NextAction("starfire",         5.1f),
