@@ -816,15 +816,12 @@ bool BGStatusAction::Execute(Event event)
     if (!queueTypeId)
         return false;
 
-    // A companion recruited after queueing must not be pulled out of that party.
-    // Cover both normal invitations and the WAIT_QUEUE force-join recovery path.
+    // Preserve explicit human-led group queues, but reject stale solo invitations
+    // after recruitment. Cover normal invitations and WAIT_QUEUE force-join recovery.
     if ((statusid == STATUS_WAIT_QUEUE || statusid == STATUS_WAIT_JOIN) && !bot->InBattleground() &&
-        !sRandomPlayerbotMgr.CanAutoJoinBattleground(bot, BattlegroundMgr::BGArenaType(queueTypeId) != 0))
+        !sRandomPlayerbotMgr.CanAcceptBattlegroundQueue(bot, queueTypeId))
     {
-        WorldPacket packet(CMSG_BATTLEFIELD_PORT, 20);
-        packet << uint8(BattlegroundMgr::BGArenaType(queueTypeId)) << uint8(0) << uint32(_bgTypeId)
-               << uint16(0x1F90) << uint8(0); // Leave queue, never leave/disband the player's group.
-        bot->GetSession()->QueuePacket(new WorldPacket(packet));
+        sRandomPlayerbotMgr.CancelCompanionBattlegroundQueue(bot, queueTypeId);
         botAI->GetAiObjectContext()->GetValue<uint32>("bg type")->Set(0);
         return true; // No strategy reset: preserve the player's current instructions.
     }

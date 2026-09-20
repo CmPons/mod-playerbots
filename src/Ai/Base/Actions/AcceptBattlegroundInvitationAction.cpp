@@ -12,7 +12,7 @@
 
 bool AcceptBgInvitationAction::Execute(Event /*event*/)
 {
-    if (!sRandomPlayerbotMgr.CanAutoJoinBattleground(bot))
+    if (!sRandomPlayerbotMgr.CanAcceptBattlegroundQueue(bot, BATTLEGROUND_QUEUE_WS))
         return false;
 
     uint8 type = 0;                      // arenatype if arena

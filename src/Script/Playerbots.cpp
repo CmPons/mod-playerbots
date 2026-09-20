@@ -6,6 +6,7 @@
 #include "Playerbots.h"
 
 #include "BattlefieldScript.h"
+#include "BattlegroundMgr.h"
 #include "Channel.h"
 #include "Config.h"
 #include "DatabaseEnv.h"
@@ -102,12 +103,13 @@ public:
         return false;
     }
 
-    bool OnPlayerCanBattleFieldPort(Player* player, uint8 arenaType, BattlegroundTypeId /*type*/,
+    bool OnPlayerCanBattleFieldPort(Player* player, uint8 arenaType, BattlegroundTypeId type,
                                    uint8 action) override
     {
-        // Final guard at packet consumption, after any intervening party changes.
-        // Always allow leaving a queue or battleground.
-        return !action || sRandomPlayerbotMgr.CanAutoJoinBattleground(player, arenaType != 0);
+        // Recheck the exact queue at packet consumption, including human-led
+        // group consent. Always allow a client's explicit leave request.
+        return !action || sRandomPlayerbotMgr.CanAcceptBattlegroundQueue(
+            player, BattlegroundMgr::BGQueueTypeId(type, arenaType));
     }
 
     void OnPlayerLogin(Player* player) override

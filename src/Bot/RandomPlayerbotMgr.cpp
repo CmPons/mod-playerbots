@@ -19,6 +19,7 @@
 #include "AiFactory.h"
 #include "Battleground.h"
 #include "BattlegroundMgr.h"
+#include "BattlegroundQueue.h"
 #include "ChannelMgr.h"
 #include "Config.h"
 #include "DBCStores.h"
@@ -37,6 +38,7 @@
 #include "PerfMonitor.h"
 #include "Player.h"
 #include "PlayerbotAI.h"
+#include "PlayerbotWorldThreadProcessor.h"
 
 namespace
 {
@@ -721,6 +723,93 @@ bool RandomPlayerbotMgr::CanAutoJoinBattleground(Player* bot, bool arena)
             return false;
 
     return !botAI->HasStrategy("follow", BOT_STATE_COMBAT);
+}
+
+bool RandomPlayerbotMgr::CanAcceptBattlegroundQueue(Player* bot, BattlegroundQueueTypeId queueType)
+{
+    if (!bot || queueType == BATTLEGROUND_QUEUE_NONE)
+        return false;
+
+    bool const arena = BattlegroundMgr::BGArenaType(queueType) != 0;
+    if (CanAutoJoinBattleground(bot, arena))
+        return true;
+
+    // A player's explicit group queue is not autonomous matchmaking. Never infer
+    // consent from a master or group alone: a recruited bot may have an old solo invite.
+    Group* group = bot->GetGroup();
+    if (arena || !group || bot->GetGroupInvite())
+        return false;
+
+    GroupQueueInfo info;
+    if (!sBattlegroundMgr->GetBattlegroundQueue(queueType).GetPlayerGroupInfoData(bot->GetGUID(), &info) ||
+        info.ArenaType || info.IsRated || info.QueuedGroupGuid != group->GetGUID())
+        return false;
+
+    Player* leader = ObjectAccessor::FindConnectedPlayer(info.QueuedLeaderGuid);
+    if (!leader || leader->GetSession()->IsBot() || !group->IsMember(leader->GetGUID()))
+        return false;
+
+    // The human may enter first: the core moves them to the BG raid and removes
+    // them from Players, but retains their original party and this queue's provenance.
+    if (leader->GetGroup() != group && leader->GetOriginalGroup() != group)
+        return false;
+
+    return info.Players.count(leader->GetGUID()) ||
+           (info.IsInvitedToBGInstanceGUID && leader->GetBattlegroundId() == info.IsInvitedToBGInstanceGUID);
+}
+
+namespace
+{
+    class CancelCompanionBattlegroundQueueOperation : public PlayerbotOperation
+    {
+    public:
+        CancelCompanionBattlegroundQueueOperation(ObjectGuid botGuid, BattlegroundQueueTypeId queueType)
+            : _botGuid(botGuid), _queueType(queueType)
+        {
+        }
+
+        bool Execute() override
+        {
+            Player* bot = ObjectAccessor::FindConnectedPlayer(_botGuid);
+            if (!bot)
+                return false;
+            // Re-resolve and recheck on the world thread. An old cancellation must
+            // not remove a newly authorized group queue or an already-entered BG.
+            if (bot->InBattleground() || sRandomPlayerbotMgr.CanAcceptBattlegroundQueue(bot, _queueType))
+                return true;
+
+            BattlegroundQueue& queue = sBattlegroundMgr->GetBattlegroundQueue(_queueType);
+            GroupQueueInfo info;
+            if (!queue.GetPlayerGroupInfoData(_botGuid, &info))
+                return false;
+
+            uint32 const slot = bot->GetBattlegroundQueueIndex(_queueType);
+            // A client leave-queue packet removes the WHOLE queued group. Revoke
+            // only this bot's participation, not a human's or other members' queue.
+            bot->RemoveBattlegroundQueueId(_queueType);
+            queue.RemovePlayer(_botGuid, true);
+            WorldPacket packet;
+            sBattlegroundMgr->BuildBattlegroundStatusPacket(&packet, nullptr, slot, STATUS_NONE, 0, 0, 0, TEAM_NEUTRAL);
+            bot->SendDirectMessage(&packet);
+            if (!info.ArenaType)
+                sBattlegroundMgr->ScheduleQueueUpdate(0, 0, _queueType, BattlegroundMgr::BGTemplateId(_queueType),
+                                                     BattlegroundBracketId(info.BracketId));
+            return true;
+        }
+
+        ObjectGuid GetBotGuid() const override { return _botGuid; }
+        std::string GetName() const override { return "CancelCompanionBattlegroundQueue"; }
+
+    private:
+        ObjectGuid _botGuid;
+        BattlegroundQueueTypeId _queueType;
+    };
+}
+
+void RandomPlayerbotMgr::CancelCompanionBattlegroundQueue(Player* bot, BattlegroundQueueTypeId queueType)
+{
+    PlayerbotWorldThreadProcessor::instance().QueueOperation(
+        std::make_unique<CancelCompanionBattlegroundQueueOperation>(bot->GetGUID(), queueType));
 }
 
 void RandomPlayerbotMgr::RestoreWorldBotSoloStrategies(Player* bot)

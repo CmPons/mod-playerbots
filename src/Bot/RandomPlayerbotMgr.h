@@ -111,6 +111,8 @@ public:
     void RestoreWorldBotSoloStrategies(Player* bot);
     bool IsBattlegroundCompanion(ObjectGuid::LowType bot);
     bool CanAutoJoinBattleground(Player* bot, bool arena = false);
+    bool CanAcceptBattlegroundQueue(Player* bot, BattlegroundQueueTypeId queueType);
+    void CancelCompanionBattlegroundQueue(Player* bot, BattlegroundQueueTypeId queueType);
     bool IsPersistentCompanion(Player* bot);
     bool IsPersistentCompanion(ObjectGuid::LowType bot);
     void Randomize(Player* bot);
