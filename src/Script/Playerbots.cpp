@@ -14,6 +14,7 @@
 #include "GuildTaskMgr.h"
 #include "PlayerScript.h"
 #include "PlayerbotAIConfig.h"
+#include "TankModes.h"
 #include "PlayerbotGuildMgr.h"
 #include "PlayerbotSpellRepository.h"
 #include "PlayerbotWorldThreadProcessor.h"
@@ -192,6 +193,7 @@ public:
 
         if (botAI != nullptr)
         {
+            TankModes::Update(botAI, diff);
             botAI->UpdateAI(diff);
         }
 

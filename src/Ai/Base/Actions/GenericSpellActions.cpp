@@ -5,6 +5,7 @@
  */
 
 #include "GenericSpellActions.h"
+#include "TankModes.h"
 
 #include <ctime>
 #include <unordered_set>
@@ -140,6 +141,10 @@ CastSpellAction::CastSpellAction(PlayerbotAI* botAI, std::string const spell)
 
 bool CastSpellAction::Execute(Event /*event*/)
 {
+    if (TankModes::SuppressAutomaticSpell(botAI,
+        sSpellMgr->GetSpellInfo(AI_VALUE2(uint32, "spell id", spell)), GetTarget()))
+        return false;
+
     if (spell == "conjure food" || spell == "conjure water")
     {
         // uint32 id = AI_VALUE2(uint32, "spell id", spell);
@@ -197,6 +202,10 @@ bool CastSpellAction::isUseful()
 
     Unit* spellTarget = GetTarget();
     if (!spellTarget || !spellTarget->IsInWorld() || spellTarget->GetMapId() != bot->GetMapId())
+        return false;
+
+    if (TankModes::SuppressAutomaticSpell(botAI,
+        sSpellMgr->GetSpellInfo(AI_VALUE2(uint32, "spell id", spell)), spellTarget))
         return false;
 
     // float combatReach = bot->GetCombatReach() + target->GetCombatReach();

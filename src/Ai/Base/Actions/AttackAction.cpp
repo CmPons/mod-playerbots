@@ -15,6 +15,7 @@
 #include "Playerbots.h"
 #include "ServerFacade.h"
 #include "SharedDefines.h"
+#include "TankModes.h"
 #include "Unit.h"
 #include "WaitForAttackStrategy.h"
 
@@ -25,6 +26,11 @@ bool AttackAction::Execute(Event /*event*/)
         return false;
 
     if (!target->IsInWorld())
+        return false;
+
+    // Routine attacks obey the mode. Dedicated encounter actions calling Attack()
+    // directly and explicit commands remain separate, deliberate overrides.
+    if (botAI->raidCombat.scheduled && !TankModes::CanAcquire(botAI, target))
         return false;
 
     return Attack(target);

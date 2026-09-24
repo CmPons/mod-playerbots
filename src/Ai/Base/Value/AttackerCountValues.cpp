@@ -8,36 +8,22 @@
 
 #include "Playerbots.h"
 #include "SharedDefines.h"
+#include "TankModes.h"
 
 uint8 MyAttackerCountValue::Calculate() { return bot->getAttackers().size(); }
 
 bool HasAggroValue::Calculate()
 {
     Unit* target = GetTarget();
-    if (!target)
-    {
+    Unit* victim = TankModes::GetVictim(target);
+    if (!target || !victim)
         return true;
-    }
-    Unit* victim = target->GetVictim();
-    if (!victim)
-    {
-        return true;
-    }
-    bool isMT = botAI->IsExplicitMainTank(bot);
-    Player* victimPlayer = victim->ToPlayer();
-    if (victim &&
-        (victim->GetGUID() == bot->GetGUID() || (!isMT && victimPlayer && botAI->IsTank(victimPlayer))))
-    {
-        return true;
-    }
+    if (!victim->IsAlive() || !victim->IsInWorld())
+        return false;
 
-    bool isOffTank = botAI->HasStrategy("offtank", BOT_STATE_COMBAT) || PlayerbotAI::IsOffTank(bot);
-    if (isOffTank && victimPlayer &&
-        (victimPlayer == botAI->GetMaster() || botAI->IsMainTank(victimPlayer)))
-    {
-        return true;
-    }
-    return false;
+    // "Has aggro" also means no routine acquisition is needed/allowed. This lets
+    // tank assist select a loose target rather than fighting another tank's taunt.
+    return botAI->HasAggro(target) || !TankModes::CanAcquire(botAI, target);
 }
 
 uint8 AttackerCountValue::Calculate()

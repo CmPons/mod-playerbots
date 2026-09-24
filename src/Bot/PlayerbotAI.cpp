@@ -55,6 +55,7 @@
 #include "SocialMgr.h"
 #include "SpellAuraEffects.h"
 #include "SpellInfo.h"
+#include "TankModes.h"
 #include "Transport.h"
 #include "Unit.h"
 #include "UpdateTime.h"
@@ -2067,13 +2068,15 @@ bool PlayerbotAI::HasAggro(Unit* unit)
     if (!IsValidUnit(unit))
         return false;
 
-    bool isMT = IsExplicitMainTank(bot);
-    Unit* victim = unit->GetVictim();
-    if (victim && (victim->GetGUID() == bot->GetGUID() || (!isMT && victim->ToPlayer() && IsTank(victim->ToPlayer()))))
-    {
+    Unit* victim = TankModes::GetVictim(unit);
+    if (!victim || !victim->IsAlive() || !victim->IsInWorld())
+        return false;
+    if (victim == bot)
         return true;
-    }
-    return false;
+    if (TankModes::GetMode(this) != TankModes::Mode::Inactive)
+        return TankModes::IsHeldByOtherTank(this, unit);
+
+    return !IsExplicitMainTank(bot) && victim->ToPlayer() && IsTank(victim->ToPlayer());
 }
 
 bool PlayerbotAI::IsMovementImpaired(Unit* unit)
@@ -2500,26 +2503,9 @@ bool PlayerbotAI::IsOffTank(Player* player)
     if (!group)
         return false;
 
-    bool hasExplicitMainTank = false;
-    for (Group::member_citerator itr = group->GetMemberSlots().begin(); itr != group->GetMemberSlots().end(); ++itr)
-    {
-        if (!(itr->flags & MEMBER_FLAG_MAINTANK))
-            continue;
-
-        hasExplicitMainTank = true;
-        if (player->GetGUID() == itr->guid)
-            return false;
-    }
-
-    if (hasExplicitMainTank)
-        return true;
-
-    // Old-school raid convention when no explicit MT is marked: the tank-spec character in group 1
-    // is the default main tank. All other tank-spec bots behave as off-tanks.
-    if (player->GetSubGroup() == 0 && IsTank(player, true))
-        return false;
-
-    return true;
+    // One role resolver for targeting, status and encounter assignments. Raid subgroup
+    // placement or a legacy "offtank" strategy must not create a second, conflicting MT.
+    return player->GetGUID() != GetMainTankGuid(group);
 }
 
 uint32 PlayerbotAI::GetGroupTankNum(Player* player)

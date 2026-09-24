@@ -15,6 +15,7 @@
 #include "PossibleRpgTargetsValue.h"
 #include "PvpTriggers.h"
 #include "ServerFacade.h"
+#include "TankModes.h"
 
 bool AttackEnemyPlayerAction::isUseful()
 {
@@ -174,6 +175,9 @@ bool AttackRtiTargetAction::Execute(Event /*event*/)
 
     if (rtiTarget && rtiTarget->IsInWorld() && rtiTarget->GetMapId() == bot->GetMapId())
     {
+        if (botAI->raidCombat.scheduled && !TankModes::CanAcquire(botAI, rtiTarget))
+            return false;
+
         botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets")->Set({rtiTarget->GetGUID()});
         bool result = Attack(botAI->GetUnit(rtiTarget->GetGUID()));
         if (result)
