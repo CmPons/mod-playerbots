@@ -8,6 +8,7 @@
 
 #include "Playerbots.h"
 #include "SharedDefines.h"
+#include "TankTargetProtection.h"
 
 uint8 MyAttackerCountValue::Calculate() { return bot->getAttackers().size(); }
 
@@ -18,11 +19,17 @@ bool HasAggroValue::Calculate()
     {
         return true;
     }
+    if (ai::threat::IsTargetHeldByOtherTank(botAI, target))
+        return true;
+
     Unit* victim = target->GetVictim();
     if (!victim)
     {
         return true;
     }
+    if (!victim->IsAlive() || !victim->IsInWorld())
+        return false;
+
     bool isMT = botAI->IsExplicitMainTank(bot);
     Player* victimPlayer = victim->ToPlayer();
     if (victim &&
