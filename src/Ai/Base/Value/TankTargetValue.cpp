@@ -12,7 +12,6 @@
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 #include "Strategy.h"
-#include "TankTargetProtection.h"
 #include "ThreatManager.h"
 
 namespace
@@ -24,9 +23,6 @@ namespace
 
     bool IsOffTankProtectedTarget(PlayerbotAI* botAI, Unit* attacker)
     {
-        if (ai::threat::IsTargetHeldByOtherTank(botAI, attacker))
-            return true;
-
         if (!botAI || !attacker || !IsOffTankModeActive(botAI))
             return false;
 
@@ -39,7 +35,7 @@ namespace
             return false;
 
         Player* victimPlayer = victim->ToPlayer();
-        if (!victimPlayer || !victimPlayer->IsAlive() || !victimPlayer->IsInWorld())
+        if (!victimPlayer)
             return false;
 
         if (victimPlayer == botAI->GetMaster())
@@ -56,7 +52,7 @@ public:
 
     void CheckAttacker(Unit* creature, ThreatManager* threatMgr) override
     {
-        if (!creature || !creature->IsAlive() || IsOffTankProtectedTarget(botAI, creature))
+        if (!creature || !creature->IsAlive())
             return;
 
         Player* bot = botAI->GetBot();
@@ -111,14 +107,7 @@ public:
     bool IsBetter(Unit* new_unit, Unit* old_unit)
     {
         Player* bot = botAI->GetBot();
-        // Collect loose adds before maintaining focus on a mob we already own.
-        // Explicit MT status must not pin us to our current mob while a healer is being hit.
-        bool const newNeedsTank = !botAI->HasAggro(new_unit);
-        bool const oldNeedsTank = !botAI->HasAggro(old_unit);
-        if (newNeedsTank != oldNeedsTank)
-            return newNeedsTank;
-
-        // Within the same ownership category, preserve the explicit main tank's focus.
+        // if group has multiple tanks, explicit main tank just focus on the current target
         Unit* currentTarget = botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
         if (currentTarget && botAI->IsExplicitMainTank(bot) && botAI->GetGroupTankNum(bot) > 1)
         {

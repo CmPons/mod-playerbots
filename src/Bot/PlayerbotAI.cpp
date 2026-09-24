@@ -55,7 +55,6 @@
 #include "SocialMgr.h"
 #include "SpellAuraEffects.h"
 #include "SpellInfo.h"
-#include "TankTargetProtection.h"
 #include "Transport.h"
 #include "Unit.h"
 #include "UpdateTime.h"
@@ -2068,13 +2067,9 @@ bool PlayerbotAI::HasAggro(Unit* unit)
     if (!IsValidUnit(unit))
         return false;
 
-    if (ai::threat::IsTargetHeldByOtherTank(this, unit))
-        return true;
-
     bool isMT = IsExplicitMainTank(bot);
     Unit* victim = unit->GetVictim();
-    if (victim && victim->IsAlive() && victim->IsInWorld() &&
-        (victim->GetGUID() == bot->GetGUID() || (!isMT && victim->ToPlayer() && IsTank(victim->ToPlayer()))))
+    if (victim && (victim->GetGUID() == bot->GetGUID() || (!isMT && victim->ToPlayer() && IsTank(victim->ToPlayer()))))
     {
         return true;
     }
