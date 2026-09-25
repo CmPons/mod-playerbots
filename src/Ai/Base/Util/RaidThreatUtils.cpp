@@ -80,14 +80,21 @@ Unit* GetMainTankTarget(PlayerbotAI* botAI)
     if (!mainTank || !mainTank->IsAlive())
         return nullptr;
 
-    if (Unit* victim = mainTank->GetVictim())
-        return victim;
+    Unit* target = mainTank->GetVictim();
+    if (!target)
+    {
+        ObjectGuid selected = mainTank->GetTarget();
+        if (!selected)
+            return nullptr;
+        target = botAI->GetUnit(selected);
+    }
 
-    ObjectGuid selected = mainTank->GetTarget();
-    if (!selected)
-        return nullptr;
-
-    return botAI->GetUnit(selected);
+    // A selected boss (or an attack target we have not reached) is not permission
+    // for autonomous DPS to pull. Use target-specific engagement, not the tank's
+    // general combat flag: fighting trash must not authorize pulling a new boss.
+    // Explicit attack/pull commands have their own target/attack paths.
+    return target && target->IsAlive() && target->IsInWorld() &&
+        target->GetMap() == mainTank->GetMap() && target->IsEngagedBy(mainTank) ? target : nullptr;
 }
 
 bool ShouldHoldDamageOnTauntImmuneBoss(PlayerbotAI* botAI, Unit* target, uint8 threatPercentLimit)
