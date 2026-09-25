@@ -86,7 +86,8 @@ float MagtheridonControlTankActionsMultiplier::GetValue(Action* action)
         return 1.0f;
 
     Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
-    if (!magtheridon)
+    // Before the boss activates, normal tank acquisition/movement must remain available.
+    if (!magtheridon || !IsMagtheridonActive(magtheridon))
         return 1.0f;
 
     if (dynamic_cast<CombatFormationMoveAction*>(action) ||
@@ -100,21 +101,6 @@ float MagtheridonControlTankActionsMultiplier::GetValue(Action* action)
 
     if (dynamic_cast<AvoidAoeAction*>(action))
         return 0.0f;
-
-    if (IsMagtheridonActive(magtheridon) || GetChanneler(bot, SOUTH_CHANNELER) ||
-        GetChanneler(bot, WEST_CHANNELER) || GetChanneler(bot, EAST_CHANNELER))
-    {
-        return 1.0f;
-    }
-
-    if (dynamic_cast<CastReachTargetSpellAction*>(action) ||
-        dynamic_cast<CastTauntAction*>(action) ||
-        dynamic_cast<CastGrowlAction*>(action) ||
-        dynamic_cast<CastHandOfReckoningAction*>(action) ||
-        dynamic_cast<CastDarkCommandAction*>(action))
-    {
-        return 0.0f;
-    }
 
     return 1.0f;
 }
