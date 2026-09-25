@@ -139,6 +139,13 @@ bool CanAcquire(PlayerbotAI* ai, Unit* target)
     return !state.paused || GetVictim(target) == ai->GetBot() || state.held.count(target->GetGUID()) != 0;
 }
 
+bool CanAttack(PlayerbotAI* ai, Unit* target)
+{
+    // A covered enemy is still a valid damage target. Keep acquisition stricter:
+    // taunts and the low-health pause must not inherit this assist permission.
+    return CanAcquire(ai, target) || (IsHeldByOtherTank(ai, target) && !IsPaused(ai));
+}
+
 bool SuppressAutomaticSpell(PlayerbotAI* ai, SpellInfo const* spell, Unit* target)
 {
     // This is a normal-action admission check, NOT a global spell hook. Direct/manual

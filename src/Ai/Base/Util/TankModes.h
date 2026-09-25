@@ -27,6 +27,8 @@ namespace TankModes
     bool IsHeldByOtherTank(PlayerbotAI* ai, Unit* target);
     bool IsPaused(PlayerbotAI* ai);
     bool CanAcquire(PlayerbotAI* ai, Unit* target);
+    // Ordinary damage assistance is distinct from acquiring tank ownership/taunting.
+    bool CanAttack(PlayerbotAI* ai, Unit* target);
     bool SuppressAutomaticSpell(PlayerbotAI* ai, SpellInfo const* spell, Unit* target);
     void Update(PlayerbotAI* ai, uint32 diff);
     std::string Status(PlayerbotAI* ai);

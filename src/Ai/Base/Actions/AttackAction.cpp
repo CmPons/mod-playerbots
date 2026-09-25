@@ -28,9 +28,9 @@ bool AttackAction::Execute(Event /*event*/)
     if (!target->IsInWorld())
         return false;
 
-    // Routine attacks obey the mode. Dedicated encounter actions calling Attack()
-    // directly and explicit commands remain separate, deliberate overrides.
-    if (botAI->raidCombat.scheduled && !TankModes::CanAcquire(botAI, target))
+    // Routine damage may assist a co-tank without permission to taunt their target.
+    // Dedicated Attack() calls and explicit commands remain deliberate overrides.
+    if (botAI->raidCombat.scheduled && !TankModes::CanAttack(botAI, target))
         return false;
 
     return Attack(target);

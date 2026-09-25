@@ -32,7 +32,7 @@ public:
 
     void CheckAttacker(Unit* attacker, ThreatManager* /*threatMgr*/) override
     {
-        if (!attacker || !attacker->IsAlive() || !TankModes::CanAcquire(botAI, attacker))
+        if (!attacker || !attacker->IsAlive() || !TankModes::CanAttack(botAI, attacker))
             return;
         if (Group* group = botAI->GetBot()->GetGroup())
             if (group->GetTargetIcon(4) == attacker->GetGUID()) // preserve moon CC
@@ -45,18 +45,24 @@ public:
     bool IsBetter(Unit* candidate, Unit* previous)
     {
         Player* bot = botAI->GetBot();
+        bool const newAcquisition = TankModes::CanAcquire(botAI, candidate);
+        bool const oldAcquisition = TankModes::CanAcquire(botAI, previous);
+        // Assist a co-tank only when there is nothing available to pick up or maintain.
+        if (newAcquisition != oldAcquisition)
+            return newAcquisition;
+
         if (TankModes::GetMode(botAI) == TankModes::Mode::MainTank &&
             BossPriority(candidate) != BossPriority(previous))
             return BossPriority(candidate) > BossPriority(previous);
 
-        bool const newLoose = TankModes::GetVictim(candidate) != bot;
-        bool const oldLoose = TankModes::GetVictim(previous) != bot;
+        bool const newLoose = newAcquisition && TankModes::GetVictim(candidate) != bot;
+        bool const oldLoose = oldAcquisition && TankModes::GetVictim(previous) != bot;
         if (newLoose != oldLoose)
             return newLoose;
         if (newLoose)
             return bot->GetDistance(candidate) < bot->GetDistance(previous);
 
-        // Maintain the current owned target; do not keep switching between our own mobs.
+        // Maintain the current owned/assist target rather than repeatedly switching.
         Unit* current = botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
         if (previous == current)
             return false;
@@ -73,9 +79,12 @@ Unit* TankTargetValue::Calculate()
     FindTankTargetSmartStrategy strategy(botAI);
     Unit* best = FindTarget(&strategy);
     Unit* marked = RtiTargetValue::Calculate();
-    if (marked && marked->IsAlive() && TankModes::CanAcquire(botAI, marked) && TankModes::GetVictim(marked) != bot)
+    if (marked && marked->IsAlive() && TankModes::CanAttack(botAI, marked) && TankModes::GetVictim(marked) != bot)
     {
-        // A DPS focus icon cannot override tank ownership, health safety or MT boss priority.
+        // A focus icon must not put damage assistance ahead of actual tank work.
+        if (best && TankModes::CanAcquire(botAI, best) != TankModes::CanAcquire(botAI, marked))
+            return TankModes::CanAcquire(botAI, best) ? best : marked;
+        // Within the same priority tier, preserve the MT's encounter-boss priority.
         if (TankModes::GetMode(botAI) == TankModes::Mode::MainTank && BossPriority(best))
             return best;
         return marked;

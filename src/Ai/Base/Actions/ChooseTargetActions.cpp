@@ -175,7 +175,7 @@ bool AttackRtiTargetAction::Execute(Event /*event*/)
 
     if (rtiTarget && rtiTarget->IsInWorld() && rtiTarget->GetMapId() == bot->GetMapId())
     {
-        if (botAI->raidCombat.scheduled && !TankModes::CanAcquire(botAI, rtiTarget))
+        if (botAI->raidCombat.scheduled && !TankModes::CanAttack(botAI, rtiTarget))
             return false;
 
         botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets")->Set({rtiTarget->GetGUID()});
