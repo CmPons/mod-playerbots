@@ -65,9 +65,35 @@ bool HasAnySpell(Player* player, uint32 const (&spellIds)[Size])
     return false;
 }
 
-StatsWeightCalculator::StatsWeightCalculator(Player* player) : player_(player)
+StatsWeightCalculator::StatsWeightCalculator(Player* player, bool forLoot) : player_(player), forLoot_(forLoot)
 {
-    if (PlayerbotAI::IsHeal(player))
+    cls = player->getClass();
+    lvl = player->GetLevel();
+    tab = AiFactory::GetPlayerSpecTab(player);
+
+    // No bot strategy, group role marker, stance or shapeshift may change a loot spec.
+    if (forLoot_)
+    {
+        if ((cls == CLASS_PRIEST && tab != PRIEST_TAB_SHADOW) ||
+            (cls == CLASS_PALADIN && tab == PALADIN_TAB_HOLY) ||
+            (cls == CLASS_DRUID && tab == DRUID_TAB_RESTORATION) ||
+            (cls == CLASS_SHAMAN && tab == SHAMAN_TAB_RESTORATION))
+            type_ = CollectorType::SPELL_HEAL;
+        else if (cls == CLASS_MAGE || cls == CLASS_WARLOCK ||
+            (cls == CLASS_PRIEST && tab == PRIEST_TAB_SHADOW) ||
+            (cls == CLASS_DRUID && tab == DRUID_TAB_BALANCE) ||
+            (cls == CLASS_SHAMAN && tab == SHAMAN_TAB_ELEMENTAL))
+            type_ = CollectorType::SPELL_DMG;
+        else if ((cls == CLASS_WARRIOR && tab == WARRIOR_TAB_PROTECTION) ||
+            (cls == CLASS_PALADIN && tab == PALADIN_TAB_PROTECTION) ||
+            (cls == CLASS_DEATH_KNIGHT && tab == DEATH_KNIGHT_TAB_BLOOD))
+            type_ = CollectorType::MELEE_TANK;
+        else if (cls == CLASS_HUNTER)
+            type_ = CollectorType::RANGED;
+        else
+            type_ = CollectorType::MELEE_DMG; // Feral shares one PvE tier set; use stable cat weights.
+    }
+    else if (PlayerbotAI::IsHeal(player))
         type_ = CollectorType::SPELL_HEAL;
     else if (PlayerbotAI::IsCaster(player))
         type_ = CollectorType::SPELL_DMG;
@@ -77,9 +103,6 @@ StatsWeightCalculator::StatsWeightCalculator(Player* player) : player_(player)
         type_ = CollectorType::MELEE_DMG;
     else
         type_ = CollectorType::RANGED;
-    cls = player->getClass();
-    lvl = player->GetLevel();
-    tab = AiFactory::GetPlayerSpecTab(player);
     collector_ = std::make_unique<StatsCollector>(type_, cls);
 
     if (cls == CLASS_DEATH_KNIGHT && tab == DEATH_KNIGHT_TAB_UNHOLY)
@@ -91,8 +114,8 @@ StatsWeightCalculator::StatsWeightCalculator(Player* player) : player_(player)
     else
         hitOverflowType_ = type_;
 
-    enable_overflow_penalty_ = true;
-    enable_item_set_bonus_ = true;
+    enable_overflow_penalty_ = !forLoot_;
+    enable_item_set_bonus_ = !forLoot_;
     enable_quality_blend_ = true;
 }
 
@@ -274,8 +297,11 @@ int32 StatsWeightCalculator::PickBestRandomPropertyId(uint32 itemId)
 void StatsWeightCalculator::GenerateWeights(Player* player)
 {
     GenerateBasicWeights(player);
-    GenerateAdditionalWeights(player);
-    ApplyWeightFinetune(player);
+    if (!forLoot_)
+    {
+        GenerateAdditionalWeights(player);
+        ApplyWeightFinetune(player);
+    }
 }
 
 void StatsWeightCalculator::GenerateBasicWeights(Player* player)
@@ -322,7 +348,7 @@ void StatsWeightCalculator::GenerateBasicWeights(Player* player)
         stats_weights_[STATS_TYPE_EXPERTISE] += 2.0f;
         stats_weights_[STATS_TYPE_MELEE_DPS] += 7.0f;
     }
-    else if (cls == CLASS_DRUID && tab == DRUID_TAB_FERAL && !PlayerbotAI::IsTank(player))
+    else if (cls == CLASS_DRUID && tab == DRUID_TAB_FERAL && (forLoot_ || !PlayerbotAI::IsTank(player)))
     {
         stats_weights_[STATS_TYPE_AGILITY] += 2.2f;
         stats_weights_[STATS_TYPE_STRENGTH] += 2.4f;
@@ -743,17 +769,17 @@ void StatsWeightCalculator::CalculateItemTypePenalty(ItemTemplate const* proto)
             weight_ *= 1.5;
         }
 
-        if (cls == CLASS_ROGUE && player_->HasAura(SPELL_ROGUE_SWORD_SPECIALIZATION) &&
+        if (!forLoot_ && cls == CLASS_ROGUE && player_->HasAura(SPELL_ROGUE_SWORD_SPECIALIZATION) &&
             (proto->SubClass == ITEM_SUBCLASS_WEAPON_SWORD || proto->SubClass == ITEM_SUBCLASS_WEAPON_AXE))
         {
             weight_ *= 1.1;
         }
-        if (cls == CLASS_WARRIOR && player_->HasAura(SPELL_POLEAXE_SPECIALIZATION) &&
+        if (!forLoot_ && cls == CLASS_WARRIOR && player_->HasAura(SPELL_POLEAXE_SPECIALIZATION) &&
             (proto->SubClass == ITEM_SUBCLASS_WEAPON_POLEARM || proto->SubClass == ITEM_SUBCLASS_WEAPON_AXE2))
         {
             weight_ *= 1.1;
         }
-        if (cls == CLASS_DEATH_KNIGHT && player_->HasAura(SPELL_NERVES_OF_COLD_STEEL) && !isDoubleHand)
+        if (!forLoot_ && cls == CLASS_DEATH_KNIGHT && player_->HasAura(SPELL_NERVES_OF_COLD_STEEL) && !isDoubleHand)
         {
             weight_ *= 1.3;
         }

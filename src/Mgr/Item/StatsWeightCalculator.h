@@ -27,7 +27,8 @@ enum StatsOverflowThreshold
 class StatsWeightCalculator
 {
 public:
-    StatsWeightCalculator(Player* player);
+    // Loot scoring uses active talent specs and excludes current gear/cap/set-bonus adjustments.
+    StatsWeightCalculator(Player* player, bool forLoot = false);
     void Reset();
     float CalculateItem(uint32 itemId, int32 randomPropertyId = 0, int32 slot = -1);
     float CalculateEnchant(uint32 enchantId);
@@ -73,6 +74,7 @@ private:
 
     float weight_;
     float stats_weights_[STATS_TYPE_MAX];
+    bool forLoot_ = false;
     bool pvpSpec_ = false;
     bool exclude_resilience_ = false;
 };

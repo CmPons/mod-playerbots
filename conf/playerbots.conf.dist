@@ -339,8 +339,11 @@ AiPlayerbot.DirectTokenLoot.Enable = 0
 
 # Direct token loot mode:
 # 0 - disabled
-# 1 - random reward from the token reward pool, no class/raid composition filtering
-# 2 - reserved for future class-usable mode
+# 1 - roll an eligible PvE reward class uniformly, then roll among distinct best-scoring
+#     rewards for that class's active talent specs present in the looter's instance/map.
+#     Excludes resilience/honor/arena/PvP-quest rewards. Unknown/absent matches keep the token.
+#     Does not inspect existing equipment for upgrades or set completion.
+# Other values do not convert loot.
 # Default: 1
 AiPlayerbot.DirectTokenLoot.Mode = 1
 
