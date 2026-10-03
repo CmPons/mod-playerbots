@@ -6,6 +6,7 @@
 
 #include "MovementActions.h"
 #include "RaidCombatPolicy.h"
+#include "TrashWhirlwind.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -207,6 +208,8 @@ bool MovementAction::MoveToLOS(WorldObject* target, bool ranged)
 bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool /*idle*/, bool /*react*/, bool normal_only,
                             bool exact_waypoint, MovementPriority priority, bool lessDelay, bool backwards)
 {
+    if (mapId == bot->GetMapId() && !TrashWhirlwind::AllowsMove(botAI, Position(x, y, z)))
+        return false;
     UpdateMovementState();
     if (!IsMovingAllowed())
     {
@@ -897,6 +900,8 @@ bool MovementAction::MoveTo(WorldObject* target, float distance, MovementPriorit
 
 bool MovementAction::ReachCombatTo(Unit* target, float distance)
 {
+    if (!TrashWhirlwind::AllowsApproach(botAI, target, distance))
+        return false;
     if (botAI->raidCombat.scheduled && RaidCombat::HasMovementClaim(*botAI))
         return false;
     if (!IsMovingAllowed(target))
@@ -1198,6 +1203,8 @@ void MovementAction::UpdateMovementState()
 
 bool MovementAction::Follow(Unit* target, float distance, float angle)
 {
+    if (!TrashWhirlwind::AllowsApproach(botAI, target, distance))
+        return false;
     if (botAI->raidCombat.scheduled && RaidCombat::HasMovementClaim(*botAI))
         return false;
     UpdateMovementState();
@@ -1409,6 +1416,8 @@ void MovementAction::RecordCthunFollow()
 
 bool MovementAction::ChaseTo(WorldObject* obj, float distance)
 {
+    if (!TrashWhirlwind::AllowsApproach(botAI, obj, distance))
+        return false;
     if (botAI->raidCombat.scheduled && RaidCombat::HasMovementClaim(*botAI))
         return false;
     if (!IsMovingAllowed())
@@ -1994,6 +2003,10 @@ bool AvoidAoeAction::isUseful()
     if (getMSTime() - moveInterval < uint32(lastMoveTimer))
         return false;
 
+    for (TrashWhirlwind::Hazard const& hazard : TrashWhirlwind::FindHazards(botAI))
+        if (bot->GetExactDist(&hazard.center) <= hazard.radius)
+            return true;
+
     GuidVector traps = AI_VALUE(GuidVector, "nearest trap with damage");
     GuidVector triggers = AI_VALUE(GuidVector, "possible triggers");
     return AI_VALUE(Aura*, "area debuff") || !traps.empty() || !triggers.empty();
@@ -2001,6 +2014,8 @@ bool AvoidAoeAction::isUseful()
 
 bool AvoidAoeAction::Execute(Event /*event*/)
 {
+    if (AvoidTrashWhirlwind())
+        return true;
     // Case #1: Aura with dynamic object (e.g. rain of fire)
     if (AvoidAuraWithDynamicObj())
     {
@@ -2015,6 +2030,33 @@ bool AvoidAoeAction::Execute(Event /*event*/)
     if (AvoidUnitWithDamageAura())
     {
         return true;
+    }
+    return false;
+}
+
+bool AvoidAoeAction::AvoidTrashWhirlwind()
+{
+    if (!IsMovingAllowed() || (botAI->raidCombat.scheduled && RaidCombat::HasMovementClaim(*botAI)))
+        return false;
+
+    for (TrashWhirlwind::Hazard const& hazard : TrashWhirlwind::FindHazards(botAI))
+    {
+        if (bot->GetExactDist(&hazard.center) > hazard.radius)
+            continue;
+        Position const destination = botAI->IsMelee(bot) ?
+            BestPositionForMeleeToFlee(hazard.center, hazard.radius) :
+            BestPositionForRangedToFlee(hazard.center, hazard.radius);
+        if (destination == Position())
+            continue;
+
+        // A defensive escape must preempt ordinary approach timing, but still use normal ground pathfinding.
+        if (MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(),
+                   destination.GetPositionZ(), false, false, true, false, MovementPriority::MOVEMENT_FORCED, true))
+        {
+            botAI->InterruptSpell();
+            lastMoveTimer = getMSTime();
+            return true;
+        }
     }
     return false;
 }

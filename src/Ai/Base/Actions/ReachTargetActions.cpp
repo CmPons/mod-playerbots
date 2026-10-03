@@ -10,6 +10,7 @@
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
 #include "ServerFacade.h"
+#include "TrashWhirlwind.h"
 
 bool ReachTargetAction::Execute(Event /*event*/) { return ReachCombatTo(AI_VALUE(Unit*, GetTargetName()), distance); }
 
@@ -37,6 +38,9 @@ std::string const ReachTargetAction::GetTargetName() { return "current target"; 
 
 bool CastReachTargetSpellAction::isUseful()
 {
+    // Gap closers finish in melee, regardless of their minimum casting range.
+    if (!TrashWhirlwind::AllowsApproach(botAI, AI_VALUE(Unit*, "current target"), 0.0f))
+        return false;
     // do not move while staying
     if (botAI->HasStrategy("stay", botAI->GetState()))
     {

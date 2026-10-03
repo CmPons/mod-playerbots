@@ -121,6 +121,7 @@ public:
     bool Execute(Event event) override;
 
 protected:
+    bool AvoidTrashWhirlwind();
     bool AvoidAuraWithDynamicObj();
     bool AvoidGameObjectWithDamage();
     bool AvoidUnitWithDamageAura();
