@@ -342,6 +342,8 @@ AiPlayerbot.DirectTokenLoot.Enable = 0
 # 1 - roll an eligible PvE reward class uniformly, then roll among distinct best-scoring
 #     rewards for that class's active talent specs present in the looter's instance/map.
 #     Excludes resilience/honor/arena/PvP-quest rewards. Unknown/absent matches keep the token.
+#     Each class can be rolled only once per generated creature/chest loot batch.
+#     Exhausted eligible classes keep the original token. Class choices reset for the next loot batch.
 #     Does not inspect existing equipment for upgrades or set completion.
 # Other values do not convert loot.
 # Default: 1

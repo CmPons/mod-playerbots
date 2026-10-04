@@ -168,11 +168,12 @@ std::vector<Player*> PresentPlayers(Player* owner, bool personal)
     return players;
 }
 
-uint8 PickRewardClass(std::vector<DirectReward> const& rewards)
+uint8 PickRewardClass(std::vector<DirectReward> const& rewards, uint32 rolledClasses = 0)
 {
     uint32 mask = 0;
     for (DirectReward const& reward : rewards)
         mask |= reward.classes;
+    mask &= ~rolledClasses;
 
     std::vector<uint8> classes;
     for (uint8 cls = 1; cls < MAX_CLASSES; ++cls)
@@ -284,6 +285,9 @@ public:
                 alreadyInLoot.insert(item.itemid);
         }
 
+        // One class roll per generated loot batch, including tokens reached through reference templates.
+        // Local state deliberately resets for the next creature/chest; never track prior kills or owners.
+        uint32 rolledClasses = 0;
         for (LootItem& item : loot->items)
         {
             uint32 const tokenItemId = item.itemid;
@@ -294,7 +298,16 @@ public:
             if (candidates.empty())
                 continue;
 
-            uint8 const chosenClass = PickRewardClass(candidates);
+            uint8 const chosenClass = PickRewardClass(candidates, rolledClasses);
+            if (!chosenClass)
+            {
+                if (debug)
+                    LOG_INFO("playerbots", "DirectTokenLoot: kept token {} ({}); all eligible classes already rolled",
+                             ItemName(tokenItemId), tokenItemId);
+                continue;
+            }
+            // Even an absent/unusable class has been rolled: retain its token, without rerolling it later.
+            rolledClasses |= 1u << (chosenClass - 1);
             std::vector<uint32> const rewards = BestSpecRewards(candidates, players, chosenClass);
             if (rewards.empty())
             {
