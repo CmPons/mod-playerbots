@@ -589,7 +589,9 @@ public:
     bool IsInRealGuild();
     static std::vector<std::string> dispel_whitelist;
     bool EqualLowercaseName(std::string s1, std::string s2);
-    InventoryResult CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool swap, bool not_loading = true) const;
+    // Item valuation may ignore death; actual equipment operations retain the default check.
+    InventoryResult CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool swap, bool not_loading = true,
+                                 bool checkAlive = true) const;
     uint8 FindEquipSlot(ItemTemplate const* proto, uint32 slot, bool swap) const;
     std::vector<Item*> GetInventoryAndEquippedItems();
     std::vector<Item*> GetInventoryItems();

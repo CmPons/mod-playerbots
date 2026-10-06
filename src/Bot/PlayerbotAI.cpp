@@ -6131,7 +6131,8 @@ bool PlayerbotAI::EqualLowercaseName(std::string s1, std::string s2)
 }
 
 // A custom CanEquipItem (remove AutoUnequipOffhand in FindEquipSlot to prevent unequip on `item usage` calculation)
-InventoryResult PlayerbotAI::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool swap, bool not_loading) const
+InventoryResult PlayerbotAI::CanEquipItem(uint8 slot, uint16& dest, Item* pItem, bool swap, bool not_loading,
+                                          bool checkAlive) const
 {
     dest = 0;
     if (pItem)
@@ -6172,7 +6173,9 @@ InventoryResult PlayerbotAI::CanEquipItem(uint8 slot, uint16& dest, Item* pItem,
             if (!bot->CanUseAttackType(bot->GetAttackBySlot(eslot)))
                 return EQUIP_ERR_NOT_WHILE_DISARMED;
 
-            res = bot->CanUseItem(pItem, not_loading);
+            // Core's instance-item usability flag only adds a death check. Suppress that
+            // check for valuation, without changing script-hook or offhand-swap semantics.
+            res = bot->CanUseItem(pItem, not_loading && checkAlive);
             if (res != EQUIP_ERR_OK)
                 return res;
 

@@ -195,7 +195,9 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemTemplate const* itemProto, 
         return ITEM_USAGE_NONE;
 
     uint16 dest;
-    InventoryResult result = botAI->CanEquipItem(NULL_SLOT, dest, pItem, true, true);
+    // Evaluate whether this is worth acquiring after resurrection, not whether it
+    // can be equipped while dead. Keep all other eligibility and swap checks.
+    InventoryResult result = botAI->CanEquipItem(NULL_SLOT, dest, pItem, true, true, false);
     pItem->RemoveFromUpdateQueueOf(bot);
     delete pItem;
 
