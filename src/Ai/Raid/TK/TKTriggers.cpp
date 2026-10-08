@@ -432,7 +432,7 @@ bool KaelthasSunstriderLegendaryWeaponsAreEquippedTrigger::IsActive()
 
 bool KaelthasSunstriderLegendaryWeaponsWereLostTrigger::IsActive()
 {
-    if (bot->GetMapId() != TEMPEST_KEEP_MAP_ID)
+    if (!bot->IsAlive() || bot->GetMapId() != TEMPEST_KEEP_MAP_ID)
         return false;
 
     Map* map = bot->GetMap();
@@ -459,7 +459,7 @@ bool KaelthasSunstriderLegendaryWeaponsWereLostTrigger::IsActive()
     for (uint8 slot : weaponSlots)
     {
         if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot) &&
-            HasEquippableItemForSlot(bot, slot))
+            HasEquippableItemForSlot(botAI, slot))
             return true;
     }
 

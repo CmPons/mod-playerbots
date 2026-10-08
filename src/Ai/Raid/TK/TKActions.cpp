@@ -1337,9 +1337,42 @@ bool KaelthasSunstriderHandleAdvisorRolesInPhase3Action::Execute(Event /*event*/
     return false;
 }
 
+bool KaelthasSunstriderReequipGearAction::isUseful()
+{
+    // A rejected swap must leave time for commands, healing, following and raid bookkeeping.
+    return bot->IsAlive() &&
+           (!_hasAttempted || getMSTimeDiff(_lastAttempt, getMSTime()) >= 5000);
+}
+
 bool KaelthasSunstriderReequipGearAction::Execute(Event /*event*/)
 {
-    return botAI->DoSpecificAction("equip upgrade", Event(), true);
+    if (!isUseful())
+        return false;
+
+    static constexpr std::array<uint8, 3> weaponSlots =
+    {
+        EQUIPMENT_SLOT_MAINHAND, EQUIPMENT_SLOT_OFFHAND, EQUIPMENT_SLOT_RANGED
+    };
+    uint8 emptySlots = 0;
+    for (uint8 i = 0; i < weaponSlots.size(); ++i)
+        if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, weaponSlots[i]) &&
+            HasEquippableItemForSlot(botAI, weaponSlots[i]))
+            emptySlots |= 1 << i;
+
+    if (!emptySlots)
+        return false;
+
+    _hasAttempted = true;
+    _lastAttempt = getMSTime();
+    botAI->DoSpecificAction("equip upgrade", Event(), true);
+
+    // EquipUpgradeAction reports success even when no item moved. Only actual
+    // recovery counts here; a no-op must not monopolize this bot's action engine.
+    for (uint8 i = 0; i < weaponSlots.size(); ++i)
+        if ((emptySlots & (1 << i)) && bot->GetItemByPos(INVENTORY_SLOT_BAG_0, weaponSlots[i]))
+            return true;
+
+    return false;
 }
 
 bool KaelthasSunstriderAssignAdvisorDpsPriorityAction::Execute(Event /*event*/)

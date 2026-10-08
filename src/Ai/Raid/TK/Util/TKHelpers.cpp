@@ -6,6 +6,7 @@
 
 #include "TKHelpers.h"
 #include "TKActions.h"
+#include "ItemUsageValue.h"
 #include "LootObjectStack.h"
 #include "Playerbots.h"
 #include "RaidBossHelpers.h"
@@ -405,8 +406,13 @@ namespace TempestKeepHelpers
         return false;
     }
 
-    bool HasEquippableItemForSlot(Player* bot, uint8 slot)
+    bool HasEquippableItemForSlot(PlayerbotAI* botAI, uint8 slot)
     {
+        Player* bot = botAI->GetBot();
+        if (!bot->IsAlive() || bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            return false;
+
+        ItemUpgradeValue upgradeValue(botAI);
         for (uint8 i = 0; i < 5; ++i)
         {
             uint8 bag = (i == 0) ? INVENTORY_SLOT_BAG_0 : (INVENTORY_SLOT_BAG_START + i - 1);
@@ -421,7 +427,14 @@ namespace TempestKeepHelpers
                     continue;
 
                 uint16 dest = 0;
-                if (bot->CanEquipItem(slot, dest, item, false) == EQUIP_ERR_OK)
+                // Use the side-effect-free validator: probing must not unequip anything.
+                if (botAI->CanEquipItem(slot, dest, item, false) != EQUIP_ERR_OK || (dest & 0xFF) != slot)
+                    continue;
+
+                // Legal to equip is not enough (e.g. a hunter's skinning knife).
+                // Match the owned-instance policy used by EquipInventoryUpgrades.
+                ItemUsage usage = upgradeValue.CalculateForItem(item);
+                if (usage == ITEM_USAGE_EQUIP || usage == ITEM_USAGE_REPLACE || usage == ITEM_USAGE_BAD_EQUIP)
                     return true;
             }
         }

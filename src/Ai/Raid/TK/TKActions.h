@@ -361,7 +361,12 @@ class KaelthasSunstriderReequipGearAction : public Action
 public:
     KaelthasSunstriderReequipGearAction(
         PlayerbotAI* botAI) : Action(botAI, "kael'thas sunstrider reequip gear") {}
+    bool isUseful() override;
     bool Execute(Event event) override;
+
+private:
+    uint32 _lastAttempt = 0;
+    bool _hasAttempted = false;
 };
 
 class KaelthasSunstriderMainTankPositionBossAction : public AttackAction

@@ -158,7 +158,8 @@ namespace TempestKeepHelpers
     Player* GetCapernianTank(Player* bot);
     bool IsDebuffHunter(Player* bot);
     bool IsAnyLegendaryWeaponDead(Player* bot);
-    bool HasEquippableItemForSlot(Player* bot, uint8 slot);
+    // Empty-slot recovery requires an owned item that automatic upgrade policy will consider.
+    bool HasEquippableItemForSlot(PlayerbotAI* botAI, uint8 slot);
 }
 
 #endif
