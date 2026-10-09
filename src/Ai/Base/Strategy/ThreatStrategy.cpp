@@ -14,28 +14,39 @@
 #include "Map.h"
 #include "Playerbots.h"
 #include "RaidThreatUtils.h"
+#include "RaidThreatControl.h"
 
 #include <algorithm>
 
 float ThreatMultiplier::GetValue(Action* action)
 {
-    if (AI_VALUE(bool, "neglect threat"))
-    {
-        return 1.0f;
-    }
-
     if (!action)
         return 1.0f;
+
+    using namespace ai::threat::control;
+    Settings const settings = GetSettings(bot->GetMap());
+    auto* healing = dynamic_cast<CastHealingSpellAction*>(action);
+    Unit* recipient = healing ? healing->GetTarget() : nullptr;
+    int aoeThreat = -1, targetThreat = -1;
+    auto result = [&](Reason reason)
+    {
+        if (healing)
+            Record(bot, recipient, action->getName(), reason, settings, aoeThreat, targetThreat);
+        return Blocked(reason) ? 0.0f : 1.0f;
+    };
+
+    if (AI_VALUE(bool, "neglect threat"))
+        return result(Reason::Neglect);
 
     if (TempleOfAhnQirajHelpers::IsTwinsEncounterActive(bot))
     {
         // Healing actions report AoE threat too. A DPS hold must never silence tank healing,
         // dispels or defensive buffs during the pull/teleport handoff.
-        if (dynamic_cast<CastHealingSpellAction*>(action))
-            return 1.0f;
+        if (healing)
+            return result(Reason::Twins);
         if (auto* spell = dynamic_cast<CastSpellAction*>(action))
-            if (Unit* recipient = spell->GetTarget())
-                if (!bot->IsValidAttackTarget(recipient))
+            if (Unit* spellRecipient = spell->GetTarget())
+                if (!bot->IsValidAttackTarget(spellRecipient))
                     return 1.0f;
     }
 
@@ -46,37 +57,41 @@ float ThreatMultiplier::GetValue(Action* action)
         return 1.0f;
 
     if (!AI_VALUE(bool, "group"))
-        return 1.0f;
+        return result(Reason::Ungrouped);
+
+    // Only genuine healing actions on living friendly recipients can bypass damage holds.
+    // Spell validity, mana, range, LOS, cooldowns and encounter movement remain separate checks.
+    bool const friendlyAlive = recipient && recipient->IsInWorld() && recipient->IsAlive() &&
+        recipient->GetMap() == bot->GetMap() && bot->IsFriendlyTo(recipient);
+    if (auto bypass = HealingBypass(settings, friendlyAlive, recipient ? recipient->GetHealthPct() : 100.0f))
+        return result(*bypass);
 
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    uint8 const tauntImmuneLimit = uint8(std::min<uint32>(100, std::max<uint32>(1, sConfigMgr->GetOption<uint32>(
-        "AiPlayerbot.RaidThreatDiscipline.HoldPercent", 70))));
     bool const twins = TempleOfAhnQirajHelpers::IsTwinsBossTarget(bot, currentTarget);
     if ((twins || sConfigMgr->GetOption<bool>("AiPlayerbot.RaidThreatDiscipline.Enable", true)) &&
-        ai::threat::ShouldHoldDamageOnTauntImmuneBoss(botAI, currentTarget, tauntImmuneLimit))
+        ai::threat::ShouldHoldDamageOnTauntImmuneBoss(botAI, currentTarget, settings.boss))
     {
         ai::threat::StopDirectDamage(botAI, currentTarget);
-        return 0.0f;
+        return result(Reason::Boss);
     }
 
     // The encounter already checked threat against THIS emperor's owner. The generic 80%/AoE
     // checks compare with physical tanks and would immediately silence the caster tank again.
     if (twins)
-        return 1.0f;
+        return result(Reason::Twins);
 
     if (action->getThreatType() == Action::ActionThreatType::Aoe)
     {
-        uint8 threat = AI_VALUE2(uint8, "threat", "aoe");
-        // Allow more headroom on secondary enemies; the current-target and boss gates still apply.
-        if (threat >= 90)
-            return 0.0f;
+        aoeThreat = AI_VALUE2(uint8, "threat", "aoe");
+        if (aoeThreat >= settings.aoe)
+            return result(Reason::Aoe);
     }
 
-    uint8 threat = AI_VALUE2(uint8, "threat", "current target");
-    if (threat >= 80)
-        return 0.0f;
+    targetThreat = AI_VALUE2(uint8, "threat", "current target");
+    if (targetThreat >= settings.target)
+        return result(Reason::Target);
 
-    return 1.0f;
+    return result(Reason::Allowed);
 }
 
 void ThreatStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)

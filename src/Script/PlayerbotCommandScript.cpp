@@ -10,6 +10,7 @@
 #include "PerfMonitor.h"
 #include "PlayerbotMgr.h"
 #include "RandomPlayerbotMgr.h"
+#include "RaidThreatControl.h"
 #include "ScriptMgr.h"
 
 using namespace Acore::ChatCommands;
@@ -200,4 +201,8 @@ public:
     }
 };
 
-void AddPlayerbotsCommandscripts() { new playerbots_commandscript(); }
+void AddPlayerbotsCommandscripts()
+{
+    new playerbots_commandscript();
+    AddRaidThreatControlScripts();
+}
