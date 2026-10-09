@@ -397,11 +397,16 @@ private:
     bool NonTanksDestroyEggsAndAvoidPhoenixes();
 };
 
-class KaelthasSunstriderBreakMindControlAction : public AttackAction
+// Rescue is validated against a controlled party member, not against current-target
+// boss threat. Do not inherit AttackAction's classification for the threat multiplier.
+class KaelthasSunstriderBreakMindControlAction : public MovementAction
 {
 public:
     KaelthasSunstriderBreakMindControlAction(
-        PlayerbotAI* botAI, std::string const name = "kael'thas sunstrider break mind control") : AttackAction(botAI, name) {}
+        PlayerbotAI* botAI,
+        std::string const name = "kael'thas sunstrider break mind control") : MovementAction(botAI, name)
+    {
+    }
     bool Execute(Event event) override;
 };
 

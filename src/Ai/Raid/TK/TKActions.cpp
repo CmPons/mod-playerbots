@@ -6,6 +6,7 @@
 
 #include "TKActions.h"
 #include "TKHelpers.h"
+#include "TKMindControl.h"
 #include "TKKaelthasBossAI.h"
 #include "AiFactory.h"
 #include "EquipAction.h"
@@ -1639,6 +1640,9 @@ bool KaelthasSunstriderLootLegendaryWeaponsAction::Execute(Event /*event*/)
         {
             if (bot->HasItemCount(weapon.itemId, 1, false))
             {
+                // The dagger's rescue hand is a mechanic requirement, not a stat upgrade.
+                if (weapon.itemId == ITEM_INFINITY_BLADE)
+                    continue;
                 EquipAction* equipAction =
                     dynamic_cast<EquipAction*>(botAI->GetAiObjectContext()->GetAction("equip"));
                 if (equipAction)
@@ -1649,11 +1653,12 @@ bool KaelthasSunstriderLootLegendaryWeaponsAction::Execute(Event /*event*/)
                 }
                 continue;
             }
-            return LootWeapon(weapon.npcEntry, weapon.itemId);
+            if (LootWeapon(weapon.npcEntry, weapon.itemId))
+                return true;
         }
     }
 
-    return false;
+    return EquipInfinityBlade(botAI);
 }
 
 bool KaelthasSunstriderLootLegendaryWeaponsAction::ShouldBotLootWeapon(uint32 weaponEntry)
@@ -1716,7 +1721,9 @@ bool KaelthasSunstriderLootLegendaryWeaponsAction::LootWeapon(
 
     context->GetValue<LootObject>("loot target")->Set(loot);
 
-    const float maxLootRange = sPlayerbotAIConfig.lootDistance;
+    // OpenLootAction rejects corpses beyond INTERACTION_DISTANCE - 2, even
+    // when the configured search/loot radius is larger (normally 15 yards).
+    const float maxLootRange = std::min(sPlayerbotAIConfig.lootDistance, INTERACTION_DISTANCE - 2.0f);
     constexpr float distFromObject = 2.0f;
 
     if (bot->GetDistance(weapon) > maxLootRange)
@@ -1989,31 +1996,13 @@ bool KaelthasSunstriderHandlePhoenixesAndEggsAction::NonTanksDestroyEggsAndAvoid
 
 bool KaelthasSunstriderBreakMindControlAction::Execute(Event /*event*/)
 {
-    Player* mcTarget = nullptr;
-    float closestDist = std::numeric_limits<float>::max();
-
-    Group* group = bot->GetGroup();
-    if (!group)
+    Player* mcTarget = FindKaelthasMindControlTarget(botAI);
+    if (!mcTarget)
         return false;
 
-    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
-    {
-        Player* member = ref->GetSource();
-        if (!member || member == bot)
-            continue;
-
-        if (member->HasAura(SPELL_KAELTHAS_MIND_CONTROL))
-        {
-            float dist = bot->GetExactDist2d(member);
-            if (dist < closestDist)
-            {
-                closestDist = dist;
-                mcTarget = member;
-            }
-        }
-    }
-
-    if (!mcTarget)
+    if (EquipInfinityBlade(botAI))
+        return true;
+    if (!HasReadyInfinityBlade(botAI))
         return false;
 
     if (!bot->IsWithinMeleeRange(mcTarget))
@@ -2023,29 +2012,23 @@ bool KaelthasSunstriderBreakMindControlAction::Execute(Event /*event*/)
                       MovementPriority::MOVEMENT_COMBAT, true, false);
     }
 
-    if (bot->getClass() == CLASS_ROGUE &&
-        AiFactory::GetPlayerSpecTab(bot) != ROGUE_TAB_COMBAT &&
-        botAI->CanCastSpell("sinister strike", mcTarget))
-    {
-        return botAI->CastSpell("sinister strike", mcTarget);
-    }
-    else
-    {
-        static const std::array<const char*, 4> spells =
-        {
-            "hamstring",
-            "wing clip",
-            "shiv",
-            "stormstrike"
-        };
-        for (const char* spell : spells)
-        {
-            if (botAI->CanCastSpell(spell, mcTarget))
-                return botAI->CastSpell(spell, mcTarget);
-        }
-    }
+    char const* ability = InfinityBladeAbility(botAI);
+    if (!ability || !botAI->CanCastSpell(ability, mcTarget))
+        return false;
 
-    return false;
+    ObjectGuid const targetGuid = mcTarget->GetGUID();
+    std::string const targetName = mcTarget->GetName();
+    if (!botAI->CastSpell(ability, mcTarget))
+        return false;
+
+    // Submission is not a guaranteed hit/proc. Re-resolve after the native cast;
+    // report actual aura state, without granting a proc or removing it ourselves.
+    Player* after = ObjectAccessor::FindPlayer(targetGuid);
+    char const* state = !after || !after->IsInWorld() || after->GetMap() != bot->GetMap() ? "unavailable" :
+        (after->HasAura(SPELL_KAELTHAS_MIND_CONTROL) ? "present" : "absent");
+    LOG_INFO("server", "[PlayerbotTKMC] {} submitted {} for {}; MC after submission: {}",
+        bot->GetName(), ability, targetName, state);
+    return true;
 }
 
 // Shock Barrier needs to be #1 focus, even if there is a Phoenix Egg up

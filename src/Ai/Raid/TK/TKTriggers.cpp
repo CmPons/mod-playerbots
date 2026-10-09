@@ -6,6 +6,7 @@
 
 #include "TKTriggers.h"
 #include "TKHelpers.h"
+#include "TKMindControl.h"
 #include "TKActions.h"
 #include "TKKaelthasBossAI.h"
 #include "Playerbots.h"
@@ -491,30 +492,7 @@ bool KaelthasSunstriderPhoenixesAndEggsAreSpawningTrigger::IsActive()
 
 bool KaelthasSunstriderRaidMemberIsMindControlledTrigger::IsActive()
 {
-    Unit* kaelthas = AI_VALUE2(Unit*, "find target", "kael'thas sunstrider");
-    if (!kaelthas)
-        return false;
-
-    if (botAI->IsTank(bot) && kaelthas->GetVictim() == bot)
-        return false;
-
-    if (!bot->HasItemCount(ITEM_INFINITY_BLADE, 1, true))
-        return false;
-
-    if (Group* group = bot->GetGroup())
-    {
-        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
-        {
-            Player* member = ref->GetSource();
-            if (!member || !member->IsAlive())
-                continue;
-
-            if (member->HasAura(SPELL_KAELTHAS_MIND_CONTROL))
-                return true;
-        }
-    }
-
-    return false;
+    return FindKaelthasMindControlTarget(botAI) != nullptr;
 }
 
 bool KaelthasSunstriderBossIsCastingPyroblastTrigger::IsActive()

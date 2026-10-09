@@ -4,6 +4,7 @@
  */
 
 #include "PlayerbotAI.h"
+#include "TKMindControl.h"
 
 #include <cmath>
 #include <mutex>
@@ -5255,6 +5256,9 @@ void PlayerbotAI::_fillGearScoreData(Player* player, Item* item, std::vector<uin
 
 std::string const PlayerbotAI::HandleRemoteCommand(std::string const command)
 {
+    if (command == "tkmc")
+        return TempestKeepHelpers::DescribeKaelthasMindControl(this);
+
     if (command == "state")
     {
         switch (currentState)
