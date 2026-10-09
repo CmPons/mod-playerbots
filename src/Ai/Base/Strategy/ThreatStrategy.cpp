@@ -67,7 +67,8 @@ float ThreatMultiplier::GetValue(Action* action)
     if (action->getThreatType() == Action::ActionThreatType::Aoe)
     {
         uint8 threat = AI_VALUE2(uint8, "threat", "aoe");
-        if (threat >= 50)
+        // Allow more headroom on secondary enemies; the current-target and boss gates still apply.
+        if (threat >= 90)
             return 0.0f;
     }
 
