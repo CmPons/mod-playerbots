@@ -97,6 +97,38 @@ Unit* GetMainTankTarget(PlayerbotAI* botAI)
         target->GetMap() == mainTank->GetMap() && target->IsEngagedBy(mainTank) ? target : nullptr;
 }
 
+// A boss may be deliberately off-tanked. Resolve against THIS target's threat table,
+// not the raid's MT label. Keep a zero-threat eligible tank for opening-pull admission.
+Unit* GetHighestThreatTank(PlayerbotAI* botAI, Unit* target)
+{
+    if (!botAI || !target)
+        return nullptr;
+
+    Player* bot = botAI->GetBot();
+    Group* group = bot ? bot->GetGroup() : nullptr;
+    if (!group || !target->IsInWorld() || target->GetMap() != bot->GetMap())
+        return nullptr;
+
+    Unit* result = nullptr;
+    float highest = -1.0f;
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* tank = ref->GetSource();
+        if (!tank || !tank->IsAlive() || !tank->IsInWorld() || tank->GetMap() != target->GetMap() ||
+            !tank->InSamePhase(target) || tank->GetCharmerGUID() || tank->IsGameMaster() || !bot->IsFriendlyTo(tank) ||
+            !PlayerbotAI::IsTank(tank))
+            continue;
+
+        float const threat = target->GetThreatMgr().GetThreat(tank);
+        if (threat > highest)
+        {
+            highest = threat;
+            result = tank;
+        }
+    }
+    return result;
+}
+
 bool ShouldHoldDamageOnTauntImmuneBoss(PlayerbotAI* botAI, Unit* target, uint8 threatPercentLimit)
 {
     if (!botAI || !target || !IsTauntImmuneRaidBoss(target))
@@ -113,7 +145,7 @@ bool ShouldHoldDamageOnTauntImmuneBoss(PlayerbotAI* botAI, Unit* target, uint8 t
     Unit* mainTank = twins ? TempleOfAhnQirajHelpers::GetTwinsTank(bot,
         target == TempleOfAhnQirajHelpers::GetTwin(bot, TempleOfAhnQirajHelpers::AQT_DATA_VEKLOR)
             ? TempleOfAhnQirajHelpers::AQT_DATA_VEKLOR : TempleOfAhnQirajHelpers::AQT_DATA_VEKNILASH)
-        : GetMainTank(botAI);
+        : GetHighestThreatTank(botAI, target);
     if (mainTank == bot)
         return false;
     if (!mainTank || !mainTank->IsAlive())
@@ -130,7 +162,7 @@ bool ShouldHoldDamageOnTauntImmuneBoss(PlayerbotAI* botAI, Unit* target, uint8 t
     float const tankThreat = threatMgr.GetThreat(mainTank);
     float const botThreat = threatMgr.GetThreat(bot);
 
-    // Opening pull: do not let DPS/healers start before the MT has any real threat.
+    // Opening pull: do not let DPS/healers start before any eligible tank has real threat.
     if (target->IsInCombat() && tankThreat <= 0.0f && botThreat <= 0.0f)
         return true;
 

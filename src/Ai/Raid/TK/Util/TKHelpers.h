@@ -62,6 +62,7 @@ namespace TempestKeepHelpers
 
         // Kael'thas Sunstrider
         NPC_KAELTHAS_SUNSTRIDER         = 19622,
+        NPC_CAPERNIAN                   = 20062,
         NPC_NETHERSTRAND_LONGBOW        = 21268,
         NPC_DEVASTATION                 = 21269,
         NPC_COSMIC_INFUSER              = 21270,

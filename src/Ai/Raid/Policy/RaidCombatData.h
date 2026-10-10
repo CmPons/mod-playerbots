@@ -22,7 +22,7 @@ struct Entity
     uint64_t guid = 0, cast = 0, victim = 0, visibleTo = 0, losKnown = 0, losTo = 0;
     uint32_t entry = 0, castSpell = 0;
     float x = 0, y = 0, z = 0, facing = 0, health = 0;
-    bool alive = false, attackable = false, engaged = false, casting = false;
+    bool alive = false, attackable = false, engaged = false, casting = false, selectable = false;
     bool auraGap = false;
     unsigned auraCount = 0;
     std::array<Aura, MaxAuras> auras{};
@@ -31,6 +31,7 @@ struct Member
 {
     Entity unit;
     bool human = false, eligible = false, healer = false, tank = false, melee = false, combat = false;
+    bool mainTank = false;
     // Last maintenance/admission result, not an assertion that a spell effect succeeded.
     uint32_t movementReceipt = 0, actionReceipt = 0;
 };
@@ -54,6 +55,9 @@ struct Intent
     Operation operation = Operation::None;
     uint32_t spell = 0, aura = 0;
     unsigned actionTarget = 0;
+    // Declarative ownership only: never moves, attacks, taunts or changes a player's raid role.
+    unsigned tankTargetCount = 0;
+    std::array<unsigned, 4> tankTargets{};
 };
 struct Plan
 {

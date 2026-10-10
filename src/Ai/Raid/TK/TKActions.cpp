@@ -15,6 +15,7 @@
 #include "ObjectAccessor.h"
 #include "Playerbots.h"
 #include "RaidBossHelpers.h"
+#include "RaidCombatPolicy.h"
 
 using namespace TempestKeepHelpers;
 
@@ -1378,6 +1379,18 @@ bool KaelthasSunstriderReequipGearAction::Execute(Event /*event*/)
 
 bool KaelthasSunstriderAssignAdvisorDpsPriorityAction::Execute(Event /*event*/)
 {
+    // Authored policy priorities supersede this legacy ordering, not manual attack locks,
+    // tank jobs or personal-mechanic avoidance. PreferredTarget only admits engaged targets.
+    if (!botAI->IsTank(bot) && !botAI->IsHeal(bot))
+        if (Unit* preferred = RaidCombat::PreferredTarget(*botAI))
+        {
+            if (!AI_VALUE(GuidVector, "prioritized targets").empty())
+                return false;
+            if (AI_VALUE(Unit*, "current target") != preferred)
+                return Attack(preferred);
+            return false;
+        }
+
     // Target priority 1: Thaladred, except Capernian tank
     Player* capernianTank = GetCapernianTank(bot);
     Unit* thaladred = AI_VALUE2(Unit*, "find target", "thaladred the darkener");

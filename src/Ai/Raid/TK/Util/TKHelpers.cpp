@@ -10,6 +10,7 @@
 #include "LootObjectStack.h"
 #include "Playerbots.h"
 #include "RaidBossHelpers.h"
+#include "RaidCombatPolicy.h"
 
 namespace TempestKeepHelpers
 {
@@ -328,6 +329,9 @@ namespace TempestKeepHelpers
     // (2) If no assistant Warlock, then look for any Warlock bot
     Player* GetCapernianTank(Player* bot)
     {
+        if (Player* assigned = RaidCombat::AssignedTank(bot, NPC_CAPERNIAN))
+            return assigned;
+
         Group* group = bot->GetGroup();
         if (!group)
             return nullptr;

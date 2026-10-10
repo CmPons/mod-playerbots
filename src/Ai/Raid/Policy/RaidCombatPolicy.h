@@ -18,6 +18,8 @@ bool UsesCombatPolicy(PlayerbotAI& ai);
 bool Engaged(Player const& bot, Unit const& target);
 bool HasMovementClaim(PlayerbotAI& ai);
 Unit* PreferredTarget(PlayerbotAI& ai);
+// Resolve a fresh, checked Lua ownership declaration; never an instruction to acquire threat.
+Player* AssignedTank(Player* requester, uint32_t creatureEntry);
 void RecordScheduledMotion(PlayerbotAI& ai);
 void MaintainGround(PlayerbotAI& ai, Intent const& intent, uint64_t generation, uint32_t issued);
 void ReleaseGround(PlayerbotAI& ai);

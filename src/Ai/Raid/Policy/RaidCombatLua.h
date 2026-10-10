@@ -29,6 +29,7 @@ void CombatEntity(lua_State* state, RaidCombat::Entity const& unit)
     Number(state, "cast_spell", unit.castSpell);
     Boolean(state, "casting", unit.casting);
     Boolean(state, "alive", unit.alive);
+    Boolean(state, "selectable", unit.selectable);
     Boolean(state, "attackable", unit.attackable);
     Boolean(state, "engaged", unit.engaged);
     Boolean(state, "aura_gap", unit.auraGap);
@@ -70,11 +71,12 @@ void CombatKeys(lua_State* state)
     lua_pushnil(state);
     while (lua_next(state, -2))
     {
-        if (++count > 9 || lua_type(state, -2) != LUA_TSTRING)
+        if (++count > 10 || lua_type(state, -2) != LUA_TSTRING)
             luaL_error(state, "invalid intent key");
         char const* key = lua_tostring(state, -2);
         bool known = false;
-        for (char const* allowed : {"movement", "x", "y", "z", "target", "operation", "spell", "aura", "action_target"})
+        for (char const* allowed : {"movement", "x", "y", "z", "target", "operation", "spell", "aura",
+                "action_target", "tank_targets"})
             known = known || !std::strcmp(key, allowed);
         if (!known)
             luaL_error(state, "unknown intent key %s", key);
@@ -109,6 +111,7 @@ int Runtime::EvaluateCombatProtected(lua_State* state)
         Boolean(state, "eligible", member.eligible);
         Boolean(state, "healer", member.healer);
         Boolean(state, "tank", member.tank);
+        Boolean(state, "main_tank", member.mainTank);
         Boolean(state, "melee", member.melee);
         Boolean(state, "combat", member.combat);
         Number(state, "movement_receipt", member.movementReceipt);
@@ -137,6 +140,7 @@ int Runtime::EvaluateCombatProtected(lua_State* state)
             return luaL_error(state, "unknown output key");
         lua_pop(state, 1);
     }
+    bool assigned[RaidCombat::MaxEntities] = {};
     for (unsigned i = 0; i < snapshot.count; ++i)
     {
         lua_rawgeti(state, -1, i + 1);
@@ -150,6 +154,42 @@ int Runtime::EvaluateCombatProtected(lua_State* state)
         intent.spell = CombatInteger(state, "spell", 100000);
         intent.aura = CombatInteger(state, "aura", 100000);
         intent.actionTarget = CombatInteger(state, "action_target", snapshot.entityCount);
+        // Optional API2 extension. Ownership is a declaration, including for a human tank,
+        // not authority to issue movement/actions for ineligible members.
+        intent.tankTargetCount = 0;
+        RawField(state, -1, "tank_targets");
+        if (!lua_isnil(state, -1))
+        {
+            if (!lua_istable(state, -1) || lua_rawlen(state, -1) > intent.tankTargets.size() ||
+                !snapshot.members[i].tank || !snapshot.members[i].unit.alive)
+                return luaL_error(state, "invalid tank_targets owner or budget");
+            unsigned const length = static_cast<unsigned>(lua_rawlen(state, -1));
+            unsigned keys = 0;
+            lua_pushnil(state);
+            while (lua_next(state, -2))
+            {
+                if (++keys > length || !lua_isinteger(state, -2) || lua_tointeger(state, -2) < 1 ||
+                    lua_tointeger(state, -2) > length)
+                    return luaL_error(state, "invalid tank_targets key");
+                lua_pop(state, 1);
+            }
+            for (unsigned j = 0; j < length; ++j)
+            {
+                lua_rawgeti(state, -1, j + 1);
+                if (!lua_isinteger(state, -1) || lua_tointeger(state, -1) < 1 ||
+                    lua_tointeger(state, -1) > snapshot.entityCount)
+                    return luaL_error(state, "invalid tank_targets index");
+                unsigned const index = static_cast<unsigned>(lua_tointeger(state, -1));
+                auto const& entity = snapshot.entities[index - 1];
+                if (assigned[index - 1] || !entity.entry || !entity.alive || !entity.engaged ||
+                    !entity.attackable || !entity.selectable)
+                    return luaL_error(state, "invalid tank_targets scope or duplicate");
+                assigned[index - 1] = true;
+                intent.tankTargets[intent.tankTargetCount++] = index;
+                lua_pop(state, 1);
+            }
+        }
+        lua_pop(state, 1);
         if (intent.movement == RaidCombat::Positioning::Ground)
         {
             intent.x = CombatCoordinate(state, "x");

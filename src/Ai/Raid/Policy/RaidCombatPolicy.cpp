@@ -30,6 +30,8 @@ void CopyUnit(Unit& unit, Entity& result)
     result.facing = unit.GetOrientation();
     result.health = unit.GetHealthPct();
     result.alive = unit.IsAlive();
+    result.selectable = !unit.HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_NON_ATTACKABLE) &&
+        !unit.HasUnitState(UNIT_STATE_DIED);
     result.victim = unit.GetVictim() ? unit.GetVictim()->GetGUID().GetRawValue() : 0;
     for (auto slot : {CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL})
         if (Spell* spell = unit.GetCurrentSpell(slot))
@@ -141,6 +143,7 @@ void Collect(Map* map, CthunPolicy::Snapshot& legacy)
         member.eligible = ai && Eligible(*ai) && !(snapshot.gaps & GenericPolicy::RosterGap);
         member.healer = PlayerbotAI::IsHeal(player);
         member.tank = PlayerbotAI::IsTank(player);
+        member.mainTank = PlayerbotAI::IsMainTank(player);
         member.melee = PlayerbotAI::IsMelee(player);
         member.combat = player->IsInCombat();
         member.movementReceipt = ai ? ai->raidCombat.movementReceipt : 0;
