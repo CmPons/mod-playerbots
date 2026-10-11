@@ -3319,6 +3319,7 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
 
     if (bot->HasUnitState(UNIT_STATE_LOST_CONTROL))
     {
+        RecordSpellCastFailure(spellid, target, ai::casting::Stage::Check, ai::casting::Reason::Control);
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasRealPlayerMaster()))
         {
             LOG_DEBUG("playerbots", "Can cast spell failed. Unit state lost control. - spellid: {}, bot name: {}",
@@ -3347,6 +3348,9 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
         }
         return false;
     }
+
+    if (!IsSpellFlightAllowed(spellid, target, ai::casting::Stage::Check))
+        return false;
 
     if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr)
     {
@@ -3398,6 +3402,7 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
     // bool interruptOnMove = spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_MOVEMENT;
     if ((CastingTime || spellInfo->IsAutoRepeatRangedSpell()) && bot->isMoving())
     {
+        RecordSpellCastFailure(spellid, target, ai::casting::Stage::Check, ai::casting::Reason::Moving);
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasRealPlayerMaster()))
         {
             LOG_DEBUG("playerbots", "Casting time and bot is moving - target name: {}, spellid: {}, bot name: {}",
@@ -3475,6 +3480,7 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
         case SPELL_FAILED_OUT_OF_RANGE:
             return true;
         default:
+            RecordSpellCastFailure(spellid, target, ai::casting::Stage::Check, ai::casting::Reason::Core, result);
             if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasRealPlayerMaster()))
             {
                 LOG_DEBUG("playerbots",
@@ -3562,6 +3568,10 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, float x, float y, float z, bool c
     if (!spellInfo)
         return false;
 
+    Position const destination(x, y, z);
+    if (!IsSpellFlightAllowed(spellid, nullptr, ai::casting::Stage::Check, &destination))
+        return false;
+
     if (!itemTarget)
     {
         if (bot->GetDistance(x, y, z) > sPlayerbotAIConfig.sightDistance)
@@ -3588,6 +3598,8 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, float x, float y, float z, bool c
         case SPELL_CAST_OK:
             return true;
         default:
+            RecordSpellCastFailure(spellid, nullptr, ai::casting::Stage::Check,
+                                   ai::casting::Reason::Core, result, &destination);
             return false;
     }
 }
@@ -3664,15 +3676,8 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
     // aiObjectContext->GetValue<LastMovement&>("last movement")->Get().Set(nullptr);
     // aiObjectContext->GetValue<time_t>("stay time")->Set(0);
 
-    if (bot->IsFlying() || bot->HasUnitState(UNIT_STATE_IN_FLIGHT))
-    {
-        // if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasRealPlayerMaster()))
-        // {
-        //     LOG_DEBUG("playerbots", "Spell cast is flying - target name: {}, spellid: {}, bot name: {}}",
-        //         target->GetName(), spellId, bot->GetName());
-        // }
+    if (!IsSpellFlightAllowed(spellId, target, ai::casting::Stage::Execute))
         return false;
-    }
 
     // bot->ClearUnitState(UNIT_STATE_CHASE);
     // bot->ClearUnitState(UNIT_STATE_FOLLOW);
@@ -3695,6 +3700,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
 
     if (failWithDelay)
     {
+        RecordSpellCastFailure(spellId, target, ai::casting::Stage::Execute, ai::casting::Reason::Standing);
         SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
         return false;
     }
@@ -3773,6 +3779,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
 
     if (bot->isMoving() && spell->GetCastTime())
     {
+        RecordSpellCastFailure(spellId, target, ai::casting::Stage::Execute, ai::casting::Reason::Moving);
         // bot->StopMoving();
         SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
         spell->cancel();
@@ -3794,6 +3801,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
 
     if (result != SPELL_CAST_OK)
     {
+        RecordSpellCastFailure(spellId, target, ai::casting::Stage::Execute, ai::casting::Reason::Core, result);
         // if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasRealPlayerMaster()))
         // {
         //     LOG_DEBUG("playerbots", "Spell cast failed. - target name: {}, spellid: {}, bot name: {}, result: {}",
@@ -3897,6 +3905,8 @@ bool PlayerbotAI::CastSpell(uint32 spellId, float x, float y, float z, Item* ite
 
     Pet* pet = bot->GetPet();
     SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
+    if (!spellInfo)
+        return false;
     if (pet && pet->HasSpell(spellId))
     {
         bool autocast = false;
@@ -3922,7 +3932,8 @@ bool PlayerbotAI::CastSpell(uint32 spellId, float x, float y, float z, Item* ite
 
     // MotionMaster& mm = *bot->GetMotionMaster();
 
-    if (bot->IsFlying() || bot->HasUnitState(UNIT_STATE_IN_FLIGHT))
+    Position const destination(x, y, z);
+    if (!IsSpellFlightAllowed(spellId, nullptr, ai::casting::Stage::Execute, &destination))
         return false;
 
     // bot->ClearUnitState(UNIT_STATE_CHASE);
@@ -3942,6 +3953,8 @@ bool PlayerbotAI::CastSpell(uint32 spellId, float x, float y, float z, Item* ite
 
     if (failWithDelay)
     {
+        RecordSpellCastFailure(spellId, nullptr, ai::casting::Stage::Execute,
+                               ai::casting::Reason::Standing, -1, &destination);
         SetNextCheckDelay(sPlayerbotAIConfig.globalCoolDown);
         return false;
     }
@@ -3980,10 +3993,18 @@ bool PlayerbotAI::CastSpell(uint32 spellId, float x, float y, float z, Item* ite
         return false;
     }
 
-    spell->prepare(&targets);
+    SpellCastResult const result = spell->prepare(&targets);
+    if (result != SPELL_CAST_OK)
+    {
+        RecordSpellCastFailure(spellId, nullptr, ai::casting::Stage::Execute,
+                               ai::casting::Reason::Core, result, &destination);
+        return false;
+    }
 
     if (bot->isMoving() && spell->GetCastTime())
     {
+        RecordSpellCastFailure(spellId, nullptr, ai::casting::Stage::Execute,
+                               ai::casting::Reason::Moving, -1, &destination);
         // bot->StopMoving();
         SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
         spell->cancel();
@@ -5258,6 +5279,8 @@ std::string const PlayerbotAI::HandleRemoteCommand(std::string const command)
 {
     if (command == "tkmc")
         return TempestKeepHelpers::DescribeKaelthasMindControl(this);
+    if (command == "castfail")
+        return DescribeSpellCastFailures();
 
     if (command == "state")
     {

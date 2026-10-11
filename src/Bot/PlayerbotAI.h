@@ -8,6 +8,7 @@
 
 #include <stack>
 #include "RaidCombatState.h"
+#include "SpellCastAdmission.h"
 
 #include "Chat.h"
 #include "ChatFilter.h"
@@ -617,6 +618,13 @@ public:
     void AddTimedEvent(std::function<void()> callback, uint32 delayMs);
 
 private:
+    bool IsSpellFlightAllowed(uint32 spellId, Unit* target, ai::casting::Stage stage,
+                              Position const* destination = nullptr);
+    void RecordSpellCastFailure(uint32 spellId, Unit* target, ai::casting::Stage stage,
+                               ai::casting::Reason reason, int result = -1, Position const* destination = nullptr);
+    std::string DescribeSpellCastFailures() const;
+    ai::casting::Trace spellCastTrace;
+
     static void _fillGearScoreData(Player* player, Item* item, std::vector<uint32>* gearScore, uint32& twoHandScore,
                                    bool mixed = false);
     bool IsTellAllowed(PlayerbotSecurityLevel securityLevel = PLAYERBOT_SECURITY_ALLOW_ALL);
